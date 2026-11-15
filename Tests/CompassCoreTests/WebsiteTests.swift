@@ -3,11 +3,14 @@ import Foundation
 import Testing
 
 @Test func theShortcutsLinkOpensTheWebsitesShortcutsPage() throws {
-  #expect(
-    Website.shortcutsURL?.absoluteString == "https://compasslet.lunchbox-labs.dev/shortcuts/")
-  // The site publishes each docs page at its file name, so the link breaks if the page moves.
-  let page = URL(fileURLWithPath: #filePath)
+  let repository = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    .appendingPathComponent("website/docs/shortcuts.md")
+  // The site publishes each docs page under its file name at the site's own address.
+  let config = try String(
+    contentsOf: repository.appendingPathComponent("website/zensical.toml"), encoding: .utf8)
+  let siteLine = try #require(config.split(separator: "\n").first { $0.hasPrefix("site_url = ") })
+  let siteURL = try #require(siteLine.split(separator: "\"").last)
+  #expect(Website.shortcutsURL?.absoluteString == "\(siteURL)shortcuts/")
+  let page = repository.appendingPathComponent("website/docs/shortcuts.md")
   #expect(FileManager.default.fileExists(atPath: page.path))
 }

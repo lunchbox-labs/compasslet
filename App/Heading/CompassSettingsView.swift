@@ -44,7 +44,7 @@ struct CompassSettingsView: View {
           Text("Help")
         } footer: {
           Text(
-            "Shortcuts can start the Live Activity when CarPlay connects and end it when CarPlay disconnects."
+            "If the Live Activity doesn’t start when you drive with CarPlay, these shortcuts start it when CarPlay connects and end it when CarPlay disconnects."
           )
         }
         DiagnosticsSettingsSection()

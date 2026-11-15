@@ -19,7 +19,9 @@ Ordinary Home Screen and Lock Screen widgets are not included.
 While parked, open Compasslet on iPhone and allow While Using location access with
 Precise Location. Use Settings to repair permissions if needed; Always access is
 not required. Open Compasslet from the CarPlay launcher to start automatically.
-Connecting a cable alone may not launch the app.
+Connecting a cable alone may not launch the app. If the Live Activity doesn't start on your
+drives, Settings › Help › Live Activity Shortcuts opens the website's shortcuts that start it
+when CarPlay connects and end it when CarPlay disconnects.
 
 Switching to Maps keeps the drive running with the background location indicator. If
 Compasslet can't keep reading location after you switch, the drive ends about 15 seconds later.
