@@ -33,8 +33,19 @@ struct CompassSettingsView: View {
             Link("Open Settings", destination: url).foregroundStyle(.tint)
           }
         }
-        Section("Help") {
+        Section {
           Button("Show Welcome Tour", action: showTour)
+          if let url = Website.shortcutsURL {
+            Link("Live Activity Shortcuts", destination: url)
+              .foregroundStyle(.tint)
+              .accessibilityHint("Opens the Compasslet website.")
+          }
+        } header: {
+          Text("Help")
+        } footer: {
+          Text(
+            "If the Live Activity doesn’t start when you drive with CarPlay, these shortcuts start it when CarPlay connects and end it when CarPlay disconnects."
+          )
         }
         DiagnosticsSettingsSection()
         Section {

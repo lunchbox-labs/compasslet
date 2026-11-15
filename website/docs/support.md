@@ -42,7 +42,8 @@ after a minute if CarPlay isn't connected.
 If the Live Activity doesn't start when you drive with CarPlay, add the
 [Live Activity Shortcuts](shortcuts.md). They start the Live Activity when CarPlay
 connects and end it when CarPlay disconnects, without unlocking your iPhone or opening
-Compasslet.
+Compasslet. You can also open that page from Compasslet's Settings › Help › Live Activity
+Shortcuts.
 
 ## Diagnostics
 
