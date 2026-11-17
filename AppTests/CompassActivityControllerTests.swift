@@ -58,7 +58,7 @@ struct CompassActivityControllerTests {
     await controller.invalidateAndWait()
     await controller.invalidateAndWait()
     await controller.showAndWait(.init(sample: nil, status: .unavailable))
-    #expect(system.handle.updates.suffix(2).map(\.bearing) == [42, nil])
+    #expect(system.handle.updates.suffix(3).map(\.bearing) == [42, nil, nil])
     time += 1
     await controller.showAndWait(travel(90, at: time))
     #expect(system.handle.updates.last?.bearing == 90)
@@ -92,6 +92,25 @@ struct CompassActivityControllerTests {
     await controller.waitForPendingOperations()
     #expect(system.handle.updates.map(\.status) == [.unavailable, .unavailable])
     #expect(system.handle.updates.last?.appearance == appearance)
+    await controller.end().value
+  }
+
+  @Test func interruptionAfterQueuedRenewalStillRefreshesUnavailableContent() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    try await controller.start()
+    await controller.invalidateAndWait()
+    time += CompassActivityController.renewalInterval
+    controller.renew()
+    controller.invalidateReading()
+    controller.show(.init(sample: nil, status: .unavailable))
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.count == 2)
+    #expect(system.handle.updates.last?.status == .unavailable)
+    #expect(
+      system.handle.updates.last?.expiry
+        == time.addingTimeInterval(CompassActivityController.staleInterval))
     await controller.end().value
   }
 

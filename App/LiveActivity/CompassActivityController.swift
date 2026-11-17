@@ -267,7 +267,8 @@ final class CompassActivityController: CompassActivityPresenting {
     {
       return
     }
-    if content.bearing == nil, let lastContent, lastContent.bearing == nil,
+    // An explicit clear refreshes expiry even if it overtook a queued renewal.
+    if retainingReading, content.bearing == nil, let lastContent, lastContent.bearing == nil,
       lastContent.status == content.status, lastContent.appearance == appearance
     {
       return

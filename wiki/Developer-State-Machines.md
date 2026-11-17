@@ -373,13 +373,14 @@ reaches the card:
   the card unchanged, so the last direction and its sample time stay visible through stops. A
   usable sample that was never current, such as one dated after the clock, clears it;
 - `invalidateReading()` after a location interruption clears the retained reading and shows
-  unavailable;
+  unavailable, even if the card already shows unavailable. The clear writes a new expiry,
+  replacing any renewal whose queued rewrite it invalidated;
 - `waiting` clears a retained reading;
 - when no bearing is shown, an identical status and appearance adds no write, including a
   repeated `waiting` during startup or the unavailable presentation following a clear. Changed
   statuses and appearances are written immediately; duplicate input does not move `lastWrite`,
-  so the 60-second renewal still keeps the card current. A clear still invalidates queued work
-  and drops held readings even when the card already shows unavailable.
+  so the 60-second renewal still keeps the card current. Explicit clears bypass this comparison
+  and still invalidate queued work and drop held readings.
 
 ```mermaid
 stateDiagram-v2
@@ -387,6 +388,7 @@ stateDiagram-v2
     NoBearing --> NoBearing: same status and appearance / skip write
     NoBearing --> NoBearing: changed status or appearance / write
     NoBearing --> NoBearing: renewal due / rewrite with fresh expiry
+    NoBearing --> NoBearing: interruption / clear and refresh expiry
     NoBearing --> Bearing: current usable sample / write within update policy
     Bearing --> NoBearing: interruption, waiting or invalid usable sample / clear
     Bearing --> Bearing: stop or expired input / retain sample
