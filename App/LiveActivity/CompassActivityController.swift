@@ -174,8 +174,9 @@ final class CompassActivityController: CompassActivityPresenting {
   }
 
   /// This is a sampled last-reading display, not a promise of live vehicle orientation.
-  /// Unchanged readings get only the slow stale-date renewal; changed readings remain
-  /// rate-limited, to this standard interval unless a lower update frequency is chosen.
+  /// Unchanged readings and statuses without a bearing get only the slow stale-date renewal;
+  /// changed readings remain rate-limited, to this standard interval unless a lower update
+  /// frequency is chosen.
   static let changedReadingInterval = LiveActivityUpdateFrequency.everySecond.interval
 
   func show(_ presentation: TravelPresentation) {
@@ -263,6 +264,11 @@ final class CompassActivityController: CompassActivityPresenting {
     let expiredTravelSample = presentation.sample?.hasExpired(at: date) ?? false
     if content.bearing == nil, retainingReading, retainedBearing != nil,
       (presentation.status != .usable || expiredTravelSample), presentation.status != .waiting
+    {
+      return
+    }
+    if content.bearing == nil, let lastContent, lastContent.bearing == nil,
+      lastContent.status == content.status, lastContent.appearance == appearance
     {
       return
     }

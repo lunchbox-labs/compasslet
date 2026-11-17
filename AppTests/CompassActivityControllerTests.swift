@@ -5,6 +5,96 @@ import Testing
 
 @Suite @MainActor
 struct CompassActivityControllerTests {
+  @Test(arguments: [TravelStatus.waiting, .slow, .unreliable, .unavailable])
+  func repeatedStatusWithoutABearingOnlyWritesAtRenewal(_ status: TravelStatus) async throws {
+    let system = TestActivitySystem()
+    let start = Date(timeIntervalSince1970: 100)
+    var time = start
+    let controller = CompassActivityController(system: system, now: { time })
+    try await controller.start()
+    let presentation = TravelPresentation(sample: nil, status: status)
+    await controller.showAndWait(presentation)
+    let initialWrites = status == .waiting ? 0 : 1
+    #expect(system.handle.updates.count == initialWrites)
+    let original = try #require(system.handle.updates.last ?? system.requestedState)
+
+    for second in 1..<60 {
+      time = start + Double(second)
+      await controller.showAndWait(presentation)
+      controller.renew()
+      await controller.waitForPendingOperations()
+    }
+    #expect(system.handle.updates.count == initialWrites)
+    #expect((system.handle.updates.last ?? system.requestedState) == original)
+
+    time = start + 60
+    await controller.showAndWait(presentation)
+    controller.renew()
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.count == initialWrites + 1)
+    #expect(system.handle.updates.last?.status == status)
+    #expect(system.handle.updates.last?.bearing == nil)
+    #expect(system.handle.updates.last?.sampleTime == nil)
+    #expect(
+      system.handle.updates.last?.expiry
+        == time.addingTimeInterval(CompassActivityController.staleInterval))
+    await controller.end().value
+  }
+
+  @Test func statusChangesAndRecoveryStillWriteAfterRepeatedEmptyPresentations() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    try await controller.start()
+    let statuses: [TravelStatus] = [.slow, .unreliable, .unavailable, .waiting]
+    for status in statuses {
+      let presentation = TravelPresentation(sample: nil, status: status)
+      await controller.showAndWait(presentation)
+      await controller.showAndWait(presentation)
+    }
+    #expect(system.handle.updates.map(\.status) == statuses)
+    await controller.showAndWait(travel(42, at: time))
+    await controller.invalidateAndWait()
+    await controller.invalidateAndWait()
+    await controller.showAndWait(.init(sample: nil, status: .unavailable))
+    #expect(system.handle.updates.suffix(2).map(\.bearing) == [42, nil])
+    time += 1
+    await controller.showAndWait(travel(90, at: time))
+    #expect(system.handle.updates.last?.bearing == 90)
+
+    await controller.end().value
+    let next = TestActivityHandle()
+    system.handle = next
+    try await controller.start()
+    await controller.showAndWait(.init(sample: nil, status: .waiting))
+    #expect(next.updates.isEmpty)
+    await controller.showAndWait(.init(sample: nil, status: .unavailable))
+    #expect(next.updates.map(\.status) == [.unavailable])
+    await controller.end().value
+  }
+
+  @Test func repeatedClearStillAppliesAnAppearanceWhoseQueuedRewriteWasInvalidated() async throws {
+    let system = TestActivitySystem()
+    let time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    try await controller.start()
+    system.handle.suspendNextUpdate = true
+    controller.invalidateReading()
+    let deadline = ContinuousClock.now + .seconds(5)
+    while system.handle.resumeUpdate == nil, ContinuousClock.now < deadline { await Task.yield() }
+    let resume = try #require(system.handle.resumeUpdate)
+    var appearance = AppearanceValues()
+    appearance.showDegrees = false
+    controller.updateAppearance(appearance)
+    controller.invalidateReading()
+    resume.resume()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.status) == [.unavailable, .unavailable])
+    #expect(system.handle.updates.last?.appearance == appearance)
+    await controller.end().value
+  }
+
   @Test func stopsAndMissingCourseKeepOriginalReadingUntilNextValidSample() async throws {
     let system = TestActivitySystem()
     var time = Date(timeIntervalSince1970: 100)
@@ -330,7 +420,7 @@ struct CompassActivityControllerTests {
     let interval = CompassActivityController.staleInterval
     try await controller.start()
     #expect(system.requestedState?.expiry == time.addingTimeInterval(interval))
-    for status in [TravelStatus.waiting, .slow, .unreliable, .unavailable] {
+    for status in [TravelStatus.slow, .unreliable, .unavailable, .waiting] {
       time += 30
       await controller.showAndWait(.init(sample: nil, status: status))
       #expect(system.handle.updates.last?.expiry == time.addingTimeInterval(interval))
@@ -729,9 +819,9 @@ struct CompassActivityControllerTests {
     sensor.receive?(.interrupted)
     system.handle.resumeUpdate?.resume()
     await drive.waitForPendingOperations()
-    // The suspended reading, then the clear and the unavailable status; no later reading.
+    // The suspended reading, then one clear; the identical unavailable status adds no write.
     let written = system.handle.updates.dropFirst(initialCount)
-    #expect(written.map { $0.bearing == nil } == [false, true, true])
+    #expect(written.map { $0.bearing == nil } == [false, true])
     #expect(written.last?.status == .unavailable)
     await drive.endDrive()
   }
