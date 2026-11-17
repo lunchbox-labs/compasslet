@@ -95,15 +95,17 @@ struct CompassActivityControllerTests {
     await controller.end().value
   }
 
-  @Test func interruptionAfterQueuedRenewalStillRefreshesUnavailableContent() async throws {
+  @Test(arguments: [true, false])
+  func interruptionAndRenewalRefreshUnavailableContent(renewFirst: Bool) async throws {
     let system = TestActivitySystem()
     var time = Date(timeIntervalSince1970: 100)
     let controller = CompassActivityController(system: system, now: { time })
     try await controller.start()
     await controller.invalidateAndWait()
     time += CompassActivityController.renewalInterval
-    controller.renew()
+    if renewFirst { controller.renew() }
     controller.invalidateReading()
+    if !renewFirst { controller.renew() }
     controller.show(.init(sample: nil, status: .unavailable))
     await controller.waitForPendingOperations()
     #expect(system.handle.updates.count == 2)
