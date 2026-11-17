@@ -13,6 +13,10 @@ are open.
 
 These are fixed:
 
+- [#370](https://github.com/lunchbox-labs/compasslet/issues/370), fixed by
+  [#371](https://github.com/lunchbox-labs/compasslet/pull/371):
+  repeated input without a bearing rewrote identical Live Activity content at sensor frequency,
+  and an interruption wrote the same cleared state twice.
 - [#247](https://github.com/lunchbox-labs/compasslet/issues/247), fixed by
   [#250](https://github.com/lunchbox-labs/compasslet/pull/250):
   the location prompt was never shown again in the same process.
@@ -369,8 +373,28 @@ reaches the card:
   the card unchanged, so the last direction and its sample time stay visible through stops. A
   usable sample that was never current, such as one dated after the clock, clears it;
 - `invalidateReading()` after a location interruption clears the retained reading and shows
-  unavailable;
-- `waiting` is always written.
+  unavailable, even if the card already shows unavailable. The clear writes a new expiry,
+  replacing any renewal whose queued rewrite it invalidated;
+- `waiting` clears a retained reading;
+- when no bearing is shown, an identical status and appearance adds no write, including a
+  repeated `waiting` during startup or the unavailable presentation following a clear. Changed
+  statuses and appearances are written immediately; duplicate input does not move `lastWrite`,
+  so the 60-second renewal still keeps the card current. Explicit clears bypass this comparison
+  and still invalidate queued work and drop held readings.
+
+```mermaid
+stateDiagram-v2
+    [*] --> NoBearing: request starts with waiting
+    NoBearing --> NoBearing: same status and appearance / skip write
+    NoBearing --> NoBearing: changed status or appearance / write
+    NoBearing --> NoBearing: renewal due / rewrite with fresh expiry
+    NoBearing --> NoBearing: interruption / clear and refresh expiry
+    NoBearing --> Bearing: current usable sample / write within update policy
+    Bearing --> NoBearing: interruption, waiting or invalid usable sample / clear
+    Bearing --> Bearing: stop or expired input / retain sample
+    NoBearing --> [*]: end or dismissal
+    Bearing --> [*]: end or dismissal
+```
 
 `validity` and the queue's `generation` drop queued rewrites that a later clear, dismissal or
 end has overtaken. Appearance changes and stale-date renewals rewrite the last content with a new
