@@ -13,7 +13,8 @@ are open.
 
 These are fixed:
 
-- [#370](https://github.com/lunchbox-labs/compasslet/issues/370):
+- [#370](https://github.com/lunchbox-labs/compasslet/issues/370), fixed by
+  [#371](https://github.com/lunchbox-labs/compasslet/pull/371):
   repeated input without a bearing rewrote identical Live Activity content at sensor frequency,
   and an interruption wrote the same cleared state twice.
 - [#247](https://github.com/lunchbox-labs/compasslet/issues/247), fixed by
