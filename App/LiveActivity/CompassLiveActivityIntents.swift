@@ -9,7 +9,7 @@ struct StartLiveActivityIntent: LiveActivityIntent {
   static var title: LocalizedStringResource { "Start Live Activity" }
   static var description: IntentDescription? {
     IntentDescription(
-      "Starts the Compasslet Live Activity for a CarPlay drive. If CarPlay doesn’t connect, it ends after the Wait for CarPlay time set in Settings. Once CarPlay disconnects, it ends after the Auto-Stop time. Both are a minute by default."
+      "Starts the Compasslet Live Activity for a CarPlay drive. If CarPlay doesn’t connect, it ends after the Wait for CarPlay time in Compasslet’s Settings › Live Activity. Once CarPlay disconnects, it ends after the Auto-Stop time there. Both are a minute by default."
     )
   }
   static var supportedModes: IntentModes { [.background, .foreground(.dynamic)] }
@@ -90,6 +90,9 @@ enum LiveActivityShortcut {
     /// Started away from the car, so the drive ends after this many seconds unless CarPlay
     /// connects.
     case startedWithoutCarPlay(TimeInterval)
+    /// Started away from the car with the wait for CarPlay at No Limit, so nothing about the car
+    /// ends the drive until CarPlay connects.
+    case startedWithoutCarPlayUntilEnded
     case started
   }
 
@@ -135,9 +138,9 @@ enum LiveActivityShortcut {
     }
     guard drive.isDriving, drive.compactStatus != .unavailable else { return .couldNotStart }
     // Read when the run ends, since the car can come or go while it runs. A drive whose car left
-    // during the run ends on Auto-Stop, which the wait for CarPlay would misstate, and one that
-    // waits for the car without end has no end to state.
-    guard drive.isAwaitingTheCar, let wait = drive.carWaitDelay else { return .started }
+    // during the run ends on Auto-Stop, which the wait for CarPlay would misstate.
+    guard drive.isAwaitingTheCar else { return .started }
+    guard let wait = drive.carWaitDelay else { return .startedWithoutCarPlayUntilEnded }
     return .startedWithoutCarPlay(wait)
   }
 }
@@ -157,6 +160,8 @@ extension LiveActivityShortcut.StartOutcome {
     case .startedWithoutCarPlay(let wait):
       IntentDialog(
         "Live Activity started. It ends in \(Int(wait / 60)) minutes unless CarPlay connects.")
+    case .startedWithoutCarPlayUntilEnded:
+      "Live Activity started. It keeps running without CarPlay until you end it."
     case .started: "Live Activity started."
     }
   }

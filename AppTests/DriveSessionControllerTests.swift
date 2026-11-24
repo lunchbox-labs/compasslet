@@ -1862,8 +1862,8 @@ struct StartShortcutAfterNotInUseTests {
   }
 }
 
-/// The wait for CarPlay: how long a drive started away from the car, as from the phone's Live
-/// Activity button, waits for CarPlay or car audio before it ends.
+/// The wait for CarPlay: how long a drive started away from the car, as from Shortcuts or Siri,
+/// waits for CarPlay or car audio before it ends.
 @Suite @MainActor
 struct WaitForCarPlayTests {
   /// The wait for CarPlay choice the drive reads, which a test changes during a wait.

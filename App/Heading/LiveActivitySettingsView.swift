@@ -18,12 +18,12 @@ struct LiveActivitySettingsView: View {
         )
       }
       Section {
-        choices(LiveActivityAutoStop.allCases, keyPath: \.carWait, title: \.title)
+        choices(LiveActivityAutoStop.allCases, keyPath: \.carWait, title: \.waitTitle)
       } header: {
         Text("Wait for CarPlay")
       } footer: {
         Text(
-          "How long a Live Activity started without CarPlay waits for it to connect before the drive ends. Until it ends, Compasslet keeps using your location, which uses more battery."
+          "How long a Live Activity started from Shortcuts or Siri without CarPlay waits for CarPlay to connect before it ends. Until it ends, Compasslet keeps using your location, which uses more battery. Drives always end after eight hours."
         )
       }
       Section {
@@ -85,4 +85,7 @@ extension LiveActivityAutoStop {
     case .never: "Never"
     }
   }
+
+  /// The same choices as the wait for CarPlay, where “Never” would read as not waiting at all.
+  var waitTitle: String { self == .never ? "No Limit" : title }
 }

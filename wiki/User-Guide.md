@@ -25,11 +25,12 @@ start it when CarPlay connects and end it when CarPlay disconnects.
 
 Switching to Maps keeps the drive running with the background location indicator. If
 Compasslet can't keep reading location after you switch, the drive ends about 15 seconds later.
-The drive ends a minute after CarPlay disconnects (change this in
-Settings › Live Activity › Auto-Stop; see [Live Activity Settings](#live-activity-settings)),
-a minute after you start the Live Activity without CarPlay unless CarPlay connects (change this
-in Settings › Live Activity › Wait for CarPlay), when you end the Live Activity, when location access or Precise Location is turned off, or
-after eight hours.
+The drive ends when you end the Live Activity, when location access or Precise Location is
+turned off, or after eight hours. It also ends a minute after CarPlay disconnects, and a minute
+after you start the Live Activity from Shortcuts or Siri without CarPlay unless CarPlay
+connects; change these in Settings › Live Activity › Auto-Stop and Wait for CarPlay (see
+[Live Activity Settings](#live-activity-settings)). While the Live Activity runs without
+CarPlay, the compass screen's stop button ends it.
 Dismissing the Live Activity ends the drive unless Compasslet is connected on CarPlay.
 Open Compasslet on CarPlay again to start a new drive.
 
@@ -40,12 +41,12 @@ In Compasslet's Settings › Live Activity:
 - **Update Frequency** sets how often the Live Activity gets a new direction during a drive:
   Every Second (the default), Every 5 Seconds or Every 15 Seconds. iOS decides when the Lock
   Screen and CarPlay show each update. Compasslet's own CarPlay screen isn't affected.
-- **Wait for CarPlay** sets how long a Live Activity started without CarPlay, from the app,
-  Shortcuts or Siri, waits for CarPlay to connect before the drive ends: 1 Minute (the
-  default), 5 Minutes, 15 Minutes or Never. The same goes for a Live Activity started again
-  away from the car. Until the drive ends, Compasslet keeps using your location, which uses
-  more battery. With Never, the drive runs until you end it, dismiss the Live Activity or
-  eight hours pass, or until CarPlay connects and then disconnects, when Auto-Stop applies.
+- **Wait for CarPlay** sets how long a Live Activity started without CarPlay, from Shortcuts
+  or Siri, waits for CarPlay to connect before the drive ends: 1 Minute (the default),
+  5 Minutes, 15 Minutes or No Limit. The same goes for a Live Activity started again away
+  from the car. Until the drive ends, Compasslet keeps using your location, which uses more
+  battery. With No Limit, the drive runs until you end it, dismiss the Live Activity or eight
+  hours pass, or until CarPlay connects and then disconnects, when Auto-Stop applies.
 - **Auto-Stop** sets how long a drive continues after CarPlay disconnects: 1 Minute (the
   default), 5 Minutes, 15 Minutes or Never. Until the drive ends, Compasslet keeps using your
   location, which uses more battery. Drives always end after eight hours. If you
