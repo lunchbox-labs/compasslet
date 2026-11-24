@@ -161,7 +161,7 @@ extension LiveActivityShortcut.StartOutcome {
       IntentDialog(
         "Live Activity started. It ends in \(Int(wait / 60)) minutes unless CarPlay connects.")
     case .startedWithoutCarPlayUntilEnded:
-      "Live Activity started. It keeps running without CarPlay until you end it."
+      "Live Activity started. It keeps running without CarPlay until you end it, for up to eight hours."
     case .started: "Live Activity started."
     }
   }

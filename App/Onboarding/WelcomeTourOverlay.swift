@@ -202,7 +202,7 @@ struct WelcomeTourOverlay: View {
         "Compasslet shows your heading from magnetic north on iPhone, and your travel direction on CarPlay."
     case .liveActivity:
       let shown =
-        "When you open Compasslet on CarPlay, the Live Activity starts on its own and shows your travel direction on the Lock Screen and in the Dynamic Island. Until CarPlay disconnects, this button appears beside Settings in the bottom-right corner so you can end it or start it again."
+        "When you open Compasslet on CarPlay, the Live Activity starts on its own and shows your travel direction on the Lock Screen and in the Dynamic Island. While CarPlay is connected or the Live Activity is running, this button appears beside Settings in the bottom-right corner so you can end it or start it again."
       return carPlayConnected
         ? shown : shown + " You’re seeing a preview. It hides when you move on."
     case .shortcuts:

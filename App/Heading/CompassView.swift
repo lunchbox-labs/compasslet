@@ -283,6 +283,12 @@ struct CompassView: View {
 
   private var liveActivityHint: String {
     guard liveActivityRunning else { return "Shows your travel direction on the Lock Screen" }
+    // Without the car, the button leaves once the Live Activity ends, so only a shortcut starts
+    // it again.
+    guard carPlayReady else {
+      return
+        "Stops travel direction and location use until you start it again from Shortcuts or Siri"
+    }
     return
       "Stops travel direction and location use until you start it again or reopen Compasslet on CarPlay"
   }
@@ -293,6 +299,9 @@ struct CompassView: View {
     Task {
       if running {
         await drive.endLiveActivity()
+        // Without the car the button leaves with the Live Activity, so VoiceOver focus moves to
+        // the gear, which keeps its place, rather than wherever the system puts it.
+        if !carPlayReady { settingsButtonFocused = true }
         AccessibilityNotification.Announcement("Live Activity ended").post()
       } else {
         await drive.startLiveActivity()

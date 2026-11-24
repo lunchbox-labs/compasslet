@@ -120,6 +120,10 @@ final class ScreenshotTests: XCTestCase {
           .environment(\.dynamicTypeSize, .accessibility5))
     },
     Screen(name: "compass-live-activity-end") { await ScreenshotTests.compass(carPlay: .driving) },
+    // A Live Activity started from Shortcuts before CarPlay connects, which the button can end.
+    Screen(name: "compass-live-activity-end-without-carplay") {
+      await ScreenshotTests.compass(carPlay: .awayFromTheCar)
+    },
     Screen(name: "compass-live-activity-tip", showsTip: true) {
       await ScreenshotTests.compass(carPlay: .connected, showsTip: true)
     },
@@ -610,7 +614,8 @@ final class ScreenshotTests: XCTestCase {
       FileManager.default.fileExists(atPath: done.path), "No screenshot was taken of \(name)")
   }
 
-  enum CarPlay { case disconnected, connected, driving }
+  /// `awayFromTheCar` has a Live Activity running with neither CarPlay nor car audio.
+  enum CarPlay { case disconnected, connected, driving, awayFromTheCar }
 
   private static func compass(
     heading: TestHeadingSensor.Reading? = .northeast,
@@ -650,6 +655,7 @@ final class ScreenshotTests: XCTestCase {
     case .disconnected: break
     case .connected: drive.carPlayConnected()
     case .driving: await drive.carPlayActivated()
+    case .awayFromTheCar: await drive.startLiveActivity()
     }
     let onboarding = onboarding(at: tour)
     if !showsTip {
