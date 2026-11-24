@@ -223,10 +223,12 @@ final class ScreenshotTests: XCTestCase {
       AnyView(
         ScreenshotTests.liveActivitySettings().environment(\.dynamicTypeSize, .accessibility5))
     },
-    // Choices other than the standard ones, with the lowest update frequency and no auto-stop.
+    // Choices other than the standard ones, with the lowest update frequency, a longer wait for
+    // CarPlay and no auto-stop.
     Screen(name: "settings-live-activity-never") {
       ScreenshotTests.liveActivitySettings {
         $0.updateFrequency = .everyFifteenSeconds
+        $0.carWait = .fifteenMinutes
         $0.autoStop = .never
       }
     },

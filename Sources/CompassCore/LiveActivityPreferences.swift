@@ -12,16 +12,17 @@ public enum LiveActivityUpdateFrequency: Int, CaseIterable, Codable, Sendable {
   public var interval: TimeInterval { TimeInterval(rawValue) }
 }
 
-/// How long a drive keeps running after the car leaves, before it ends on its own. Raw values are
-/// stable storage identifiers and give the delay in seconds, with 0 for never.
+/// How long a drive keeps running without the car before it ends on its own: after the car leaves
+/// (auto-stop), or after a start away from the car (the wait for CarPlay). Raw values are stable
+/// storage identifiers and give the delay in seconds, with 0 for never.
 public enum LiveActivityAutoStop: Int, CaseIterable, Codable, Sendable {
   case oneMinute = 60
   case fiveMinutes = 300
   case fifteenMinutes = 900
   case never = 0
 
-  /// How long after the car leaves the drive ends, or nil when it runs until it is ended or
-  /// reaches the drive's own limit.
+  /// How long without the car the drive ends, or nil when it runs until it is ended or reaches
+  /// the drive's own limit.
   public var delay: TimeInterval? { self == .never ? nil : TimeInterval(rawValue) }
 }
 
@@ -30,6 +31,9 @@ public enum LiveActivityAutoStop: Int, CaseIterable, Codable, Sendable {
 public struct LiveActivityPreferences: Codable, Hashable, Sendable {
   public var updateFrequency: LiveActivityUpdateFrequency = .everySecond
   public var autoStop: LiveActivityAutoStop = .oneMinute
+  /// How long a drive started away from the car, or whose Live Activity started again away from
+  /// it, waits for CarPlay or car audio before it ends.
+  public var carWait: LiveActivityAutoStop = .oneMinute
 
   public init() {}
 
@@ -37,6 +41,7 @@ public struct LiveActivityPreferences: Codable, Hashable, Sendable {
   private enum CodingKeys: String, CodingKey {
     case updateFrequency = "refreshRate"
     case autoStop
+    case carWait
   }
 
   /// Decodes saved values, keeping the standard choice for a key that is missing or holds a value
@@ -50,6 +55,9 @@ public struct LiveActivityPreferences: Codable, Hashable, Sendable {
     autoStop =
       (try? values.decodeIfPresent(LiveActivityAutoStop.self, forKey: .autoStop))
       ?? standard.autoStop
+    carWait =
+      (try? values.decodeIfPresent(LiveActivityAutoStop.self, forKey: .carWait))
+      ?? standard.carWait
   }
 
   /// Loads persisted choices, recovering the standard ones from missing or corrupt data.

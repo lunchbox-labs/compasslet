@@ -4,12 +4,12 @@ import AppIntents
 /// Activity intent can start a Live Activity there. When In Use location may not start in the
 /// background, so if location reports that the app isn't in use, or no reading arrives, the
 /// intent asks to continue in the foreground and starts again there. Without CarPlay, the
-/// drive ends after the absence limit.
+/// drive ends after the wait for CarPlay set in Settings.
 struct StartLiveActivityIntent: LiveActivityIntent {
   static var title: LocalizedStringResource { "Start Live Activity" }
   static var description: IntentDescription? {
     IntentDescription(
-      "Starts the Compasslet Live Activity for a CarPlay drive. Once CarPlay disconnects, it ends after the Auto-Stop time set in Settings, a minute by default. If CarPlay doesn’t connect, it ends after a minute."
+      "Starts the Compasslet Live Activity for a CarPlay drive. If CarPlay doesn’t connect, it ends after the Wait for CarPlay time set in Settings. Once CarPlay disconnects, it ends after the Auto-Stop time. Both are a minute by default."
     )
   }
   static var supportedModes: IntentModes { [.background, .foreground(.dynamic)] }
@@ -73,6 +73,7 @@ protocol ShortcutDrive: AnyObject {
   var compactStatus: DriveSessionController.CompactStatus { get }
   var setupStatus: DriveSessionController.SetupStatus { get }
   var isAwaitingTheCar: Bool { get }
+  var carWaitDelay: TimeInterval? { get }
   var hasLiveActivity: Bool { get }
   func startLiveActivity() async
   func endLiveActivity() async
@@ -86,7 +87,10 @@ extension DriveSessionController: ShortcutDrive {}
 enum LiveActivityShortcut {
   enum StartOutcome: Equatable {
     case alreadyRunning, openWhenParked, unavailable, needsPreciseLocation, couldNotStart
-    case startedWithoutCarPlay, started
+    /// Started away from the car, so the drive ends after this many seconds unless CarPlay
+    /// connects.
+    case startedWithoutCarPlay(TimeInterval)
+    case started
   }
 
   enum EndOutcome: Equatable { case notRunning, ended }
@@ -131,8 +135,10 @@ enum LiveActivityShortcut {
     }
     guard drive.isDriving, drive.compactStatus != .unavailable else { return .couldNotStart }
     // Read when the run ends, since the car can come or go while it runs. A drive whose car left
-    // during the run ends on Auto-Stop, which the minute would misstate.
-    return drive.isAwaitingTheCar ? .startedWithoutCarPlay : .started
+    // during the run ends on Auto-Stop, which the wait for CarPlay would misstate, and one that
+    // waits for the car without end has no end to state.
+    guard drive.isAwaitingTheCar, let wait = drive.carWaitDelay else { return .started }
+    return .startedWithoutCarPlay(wait)
   }
 }
 
@@ -146,8 +152,11 @@ extension LiveActivityShortcut.StartOutcome {
       "Allow precise location for Compasslet in the Settings app, then try again."
     case .couldNotStart:
       "The Live Activity couldn’t start. Make sure Live Activities are allowed for Compasslet in the Settings app."
-    case .startedWithoutCarPlay:
+    case .startedWithoutCarPlay(let wait) where wait == 60:
       "Live Activity started. It ends in a minute unless CarPlay connects."
+    case .startedWithoutCarPlay(let wait):
+      IntentDialog(
+        "Live Activity started. It ends in \(Int(wait / 60)) minutes unless CarPlay connects.")
     case .started: "Live Activity started."
     }
   }

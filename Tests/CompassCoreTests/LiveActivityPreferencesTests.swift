@@ -8,6 +8,7 @@ import Testing
   #expect(standard.updateFrequency.interval == 1)
   #expect(standard.autoStop == .oneMinute)
   #expect(standard.autoStop.delay == 60)
+  #expect(standard.carWait == .oneMinute)
   // Nothing saved yet, as for everyone before the settings existed.
   #expect(LiveActivityPreferences.decode(nil) == standard)
 }
@@ -21,17 +22,27 @@ import Testing
   var chosen = LiveActivityPreferences()
   chosen.updateFrequency = .everyFifteenSeconds
   chosen.autoStop = .never
+  chosen.carWait = .fifteenMinutes
   let data = try JSONEncoder().encode(chosen)
   #expect(LiveActivityPreferences.decode(data) == chosen)
   // The stored form keeps its raw values, so saved choices keep their meaning.
   let stored = try JSONDecoder().decode([String: Int].self, from: data)
-  #expect(stored == ["refreshRate": 15, "autoStop": 0])
+  #expect(stored == ["refreshRate": 15, "autoStop": 0, "carWait": 900])
   // A missing key, or a value this version doesn't know, keeps the standard choice for it alone.
   #expect(
     LiveActivityPreferences.decode(Data(#"{"autoStop":300}"#.utf8)).updateFrequency == .everySecond)
   let unknown = LiveActivityPreferences.decode(Data(#"{"refreshRate":2,"autoStop":300}"#.utf8))
   #expect(unknown.updateFrequency == .everySecond)
   #expect(unknown.autoStop == .fiveMinutes)
+  #expect(unknown.carWait == .oneMinute)
+  // Choices saved before the wait for CarPlay existed keep their meaning beside it.
+  let earlier = LiveActivityPreferences.decode(Data(#"{"refreshRate":5,"autoStop":0}"#.utf8))
+  #expect(earlier.autoStop == .never)
+  #expect(earlier.carWait == .oneMinute)
+  let wait = LiveActivityPreferences.decode(Data(#"{"carWait":0}"#.utf8))
+  #expect(wait.carWait == .never)
+  #expect(wait.autoStop == .oneMinute)
+  #expect(LiveActivityPreferences.decode(Data(#"{"carWait":42}"#.utf8)).carWait == .oneMinute)
   #expect(LiveActivityPreferences.decode(Data("not json".utf8)) == LiveActivityPreferences())
   #expect(LiveActivityPreferences.decode(Data("[]".utf8)) == LiveActivityPreferences())
 }

@@ -59,7 +59,8 @@ final class DriveSessionController {
   private enum CarPresence {
     case present
     /// The drive, or the latest start of its Live Activity, came away from the car, which hasn't
-    /// shown since. The drive ends once `carPlayAbsenceLimit` passes without it.
+    /// shown since. The drive ends once the wait for CarPlay passes without it, unless that wait
+    /// is never.
     case awaited(since: Date)
     /// The car left during the drive. The drive ends once the auto-stop delay passes, unless
     /// auto-stop is never, or after `carPlayAbsenceLimit` while its Live Activity isn't running.
@@ -149,12 +150,16 @@ final class DriveSessionController {
   var isDriving: Bool { current != nil }
 
   /// Whether the drive, or the latest start of its Live Activity, came away from the car, which
-  /// hasn't shown since, so the drive ends after the start window unless CarPlay or car audio
+  /// hasn't shown since, so the drive ends after the wait for CarPlay unless CarPlay or car audio
   /// connects. Shortcuts read it, not views.
   var isAwaitingTheCar: Bool {
     guard let session = current, case .awaited = session.car else { return false }
     return true
   }
+
+  /// How long a drive waits for the car after a start away from it, or nil when it doesn't end
+  /// for the car's absence, as the wait for CarPlay is now set.
+  var carWaitDelay: TimeInterval? { carWait().delay }
 
   var compactStatus: CompactStatus {
     switch state {
@@ -180,8 +185,9 @@ final class DriveSessionController {
   /// current start or in an earlier start without a newer reading since.
   var locationNeedsForeground: Bool { current?.notInUseReport.needsForeground ?? false }
 
-  /// How long a drive started away from the car waits for CarPlay or car audio before it ends.
-  /// It is also the standard auto-stop delay once the car leaves (`LiveActivityAutoStop`).
+  /// How long a drive waits for the car by default: the standard wait for CarPlay after a start
+  /// away from it and the standard auto-stop delay once it leaves (`LiveActivityAutoStop`), and
+  /// the fixed limit once it has left while the drive's Live Activity isn't running.
   static let carPlayAbsenceLimit: TimeInterval = 60
   /// How long a drive waits for a reading after location reports that the app isn't in use
   /// before it ends, since the report can arrive while readings still flow and readings can be
@@ -204,6 +210,8 @@ final class DriveSessionController {
   /// The auto-stop choice, read whenever a limit is checked or set, so a change applies to the
   /// drive in progress.
   private let autoStop: @MainActor () -> LiveActivityAutoStop
+  /// The wait for CarPlay choice, read the same way, so a change applies to a wait already running.
+  private let carWait: @MainActor () -> LiveActivityAutoStop
   @ObservationIgnored private var active = false
   @ObservationIgnored private var suppressed = false
   /// Whether the location prompt was asked for while permission is undecided. It clears once a
@@ -223,6 +231,9 @@ final class DriveSessionController {
     backgroundTime: @escaping @MainActor () -> @MainActor () -> Void = { {} },
     autoStop: @escaping @MainActor () -> LiveActivityAutoStop = {
       LiveActivityPreferences().autoStop
+    },
+    carWait: @escaping @MainActor () -> LiveActivityAutoStop = {
+      LiveActivityPreferences().carWait
     }
   ) {
     self.sensor = sensor
@@ -231,6 +242,7 @@ final class DriveSessionController {
     self.readCarAudioRoute = carAudioRoute
     self.holdBackgroundTime = backgroundTime
     self.autoStop = autoStop
+    self.carWait = carWait
     refreshSetupStatus()
     observeAuthorization()
   }
@@ -321,7 +333,7 @@ final class DriveSessionController {
   /// The manual fallback for when the automatic CarPlay start doesn't produce a Live Activity.
   /// With no drive running, it starts one. During a drive whose Live Activity was dismissed or
   /// couldn't start, it starts only the Live Activity again. Either way, started away from the
-  /// car, as from Shortcuts, the drive ends unless CarPlay connects within the absence limit.
+  /// car, as from Shortcuts, the drive ends unless CarPlay connects within the wait for CarPlay.
   /// Call it from the foreground app or a Live Activity intent, because ActivityKit only starts
   /// activities there.
   func startLiveActivity() async {
@@ -351,7 +363,7 @@ final class DriveSessionController {
   }
 
   /// Away from the car, a drive whose Live Activity starts again waits for the car as a new drive
-  /// does, so it gets the start window from now, whatever auto-stop is set to, rather than the
+  /// does, so it gets the wait for CarPlay from now, whatever auto-stop is set to, rather than the
   /// auto-stop delay counted from when the car left.
   private func awaitCarIfAway(_ session: DriveSession) {
     refreshCarAudio()
@@ -608,9 +620,11 @@ final class DriveSessionController {
     return false
   }
 
-  /// How long the car can stay away, and since when it has: the start window for a drive, or a
-  /// Live Activity start, away from it, or the auto-stop delay once it has left. Nil while the car
-  /// shows, or once it has left when auto-stop is never. Auto-stop keeps only a drive whose Live
+  /// How long the car can stay away, and since when it has: the wait for CarPlay after a drive, or
+  /// a Live Activity start, away from it, or the auto-stop delay once it has left. Nil while the
+  /// car shows, while it is awaited when the wait is never, or once it has left when auto-stop is
+  /// never. An awaited car always has a running Live Activity, since without CarPlay a dismissal
+  /// or a failed start ends the drive. Auto-stop keeps only a drive whose Live
   /// Activity is starting or showing; one whose Live Activity was dismissed or couldn't start
   /// shows nothing once the car has gone, so it ends after the standard minute whatever auto-stop
   /// is set to.
@@ -619,7 +633,7 @@ final class DriveSessionController {
     case .present:
       return nil
     case .awaited(let since):
-      return (since: since, limit: Self.carPlayAbsenceLimit)
+      return carWait().delay.map { (since: since, limit: $0) }
     case .left(let since):
       guard session.liveActivity.isRunning else {
         return (since: since, limit: Self.carPlayAbsenceLimit)
