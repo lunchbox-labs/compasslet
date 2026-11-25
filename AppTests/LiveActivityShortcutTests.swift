@@ -13,7 +13,7 @@ private final class FakeDrive: ShortcutDrive {
   /// Whether the drive waits for the car, as one started away from it does.
   var isAwaitingTheCar = true
   /// The wait for CarPlay in seconds, nil for never.
-  var carWaitDelay: TimeInterval? = 60
+  var carWaitDelay: TimeInterval = 60
   var hasLiveActivity = false
   /// What a start leaves the Live Activity as; nil leaves no drive running.
   var startResult: DriveSessionController.CompactStatus? = .active
@@ -107,13 +107,9 @@ struct LiveActivityShortcutTests {
     let longer = FakeDrive()
     longer.carWaitDelay = 15 * 60
     #expect(await start(longer) == .startedWithoutCarPlay(15 * 60))
-    // A drive that waits for the car without end says it keeps running.
-    let never = FakeDrive()
-    never.carWaitDelay = nil
-    #expect(await start(never) == .startedWithoutCarPlayUntilEnded)
     // With the car, it says nothing about the wait.
     let withTheCar = FakeDrive()
-    withTheCar.carWaitDelay = nil
+    withTheCar.carWaitDelay = 15 * 60
     withTheCar.isAwaitingTheCar = false
     #expect(await start(withTheCar) == .started)
   }
@@ -207,9 +203,8 @@ private final class CarAudioRoute { var connected = false }
 
 /// The Start shortcut on the real drive, away from the car or as the car comes and goes, with
 /// what it says checked against when the drive ends. Where it says the drive ends unless CarPlay
-/// connects, that wait for CarPlay runs from the shortcut whatever Auto-Stop is set to, with No
-/// Limit it says the drive keeps running, and where the drive ends on Auto-Stop instead, it
-/// doesn't say so
+/// connects, that wait for CarPlay runs from the shortcut whatever Auto-Stop is set to, and where
+/// the drive ends on Auto-Stop instead, it doesn't say so
 /// ([#357](https://github.com/lunchbox-labs/compasslet/issues/357)).
 @Suite(.timeLimit(.minutes(1))) @MainActor
 struct StartShortcutAwayFromTheCarTests {
@@ -226,7 +221,7 @@ struct StartShortcutAwayFromTheCarTests {
   }
 
   private func makeDrive(
-    autoStop: LiveActivityAutoStop, carWait: LiveActivityAutoStop = .oneMinute
+    autoStop: LiveActivityAutoStop, carWait: LiveActivityCarWait = .oneMinute
   ) -> DriveSessionController {
     let carAudio = carAudio
     return DriveSessionController(
@@ -409,9 +404,9 @@ struct StartShortcutAwayFromTheCarTests {
 
   /// The wait for CarPlay sets how long a start away from the car lasts, and what the shortcut
   /// says, for a new drive and for a kept drive whose Live Activity starts again.
-  @Test(arguments: [LiveActivityAutoStop.fiveMinutes, .fifteenMinutes])
-  func startAwayFromTheCarWaitsTheChosenTime(carWait: LiveActivityAutoStop) async throws {
-    let wait = try #require(carWait.delay)
+  @Test(arguments: [LiveActivityCarWait.fiveMinutes, .fifteenMinutes])
+  func startAwayFromTheCarWaitsTheChosenTime(carWait: LiveActivityCarWait) async {
+    let wait = carWait.delay
     let fresh = makeDrive(autoStop: .oneMinute, carWait: carWait)
     let shortcut = Task { await runStartShortcut(fresh) }
     while !fresh.isDriving { await Task.yield() }
@@ -431,27 +426,31 @@ struct StartShortcutAwayFromTheCarTests {
     #expect(!kept.isDriving)
   }
 
-  /// With No Limit, a start away from the car runs until something else ends it, and the shortcut
-  /// says so. The car showing and leaving puts the drive on Auto-Stop.
-  @Test func neverWaitingForCarPlayKeepsTheDriveUntilTheCarShowsAndLeaves() async {
-    let drive = makeDrive(autoStop: .fiveMinutes, carWait: .never)
+  /// The car showing during a longer wait puts the drive on Auto-Stop once it leaves.
+  @Test(arguments: [LiveActivityAutoStop.fiveMinutes, .never])
+  func carConnectingDuringALongerWaitKeepsTheDriveUntilAutoStop(
+    autoStop: LiveActivityAutoStop
+  ) async {
+    let drive = makeDrive(autoStop: autoStop, carWait: .fifteenMinutes)
     let shortcut = Task { await runStartShortcut(drive) }
     while !drive.isDriving { await Task.yield() }
     sensor.receive?(reading())
-    #expect(await shortcut.value == .startedWithoutCarPlayUntilEnded)
-    #expect(drive.isAwaitingTheCar)
-    clock.run(until: clock.now + 60 * 60)
+    #expect(await shortcut.value == .startedWithoutCarPlay(15 * 60))
+    clock.run(until: clock.now + 10 * 60)
     #expect(drive.isDriving)
     drive.carPlayConnected()
+    clock.run(until: clock.now + 30 * 60)
+    #expect(drive.isDriving)
     drive.carPlayDisconnected()
-    await expectAutoStop(.fiveMinutes, of: drive, from: clock.now)
+    await expectAutoStop(autoStop, of: drive, from: clock.now)
   }
 
-  /// With No Limit, a dismissal away from the car still ends the drive, as nothing would show it.
-  @Test func neverWaitingForCarPlayStillEndsOnADismissal() async {
-    let drive = makeDrive(autoStop: .never, carWait: .never)
+  /// During a longer wait, a dismissal away from the car still ends the drive at once, as nothing
+  /// would show it.
+  @Test func dismissalDuringALongerWaitEndsTheDrive() async {
+    let drive = makeDrive(autoStop: .never, carWait: .fifteenMinutes)
     await keptDrive(drive)
-    #expect(await runStartShortcut(drive) == .startedWithoutCarPlayUntilEnded)
+    #expect(await runStartShortcut(drive) == .startedWithoutCarPlay(15 * 60))
     clock.run(until: clock.now + 10 * 60)
     #expect(drive.isDriving)
     activity.onDismiss?()

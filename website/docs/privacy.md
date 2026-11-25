@@ -17,8 +17,8 @@ drive starts when you open Compasslet on CarPlay, or when you start the Live Act
 the Compasslet app, from Shortcuts or with Siri. It ends when you tap or run End Live
 Activity, a minute after CarPlay disconnects (you can choose a longer time, or Never, in
 Compasslet's Settings › Live Activity › Auto-Stop), a minute after it starts if CarPlay
-isn't connected (you can choose a longer time, or No Limit, in Settings › Live Activity ›
-Wait for CarPlay), when location access or Precise Location is
+isn't connected (you can choose up to 15 minutes in Settings › Live Activity › Wait for
+CarPlay), when location access or Precise Location is
 turned off, or after eight hours. Dismissing the Live Activity ends the drive unless
 Compasslet is connected on CarPlay, where travel direction continues until CarPlay
 disconnects or you end it.

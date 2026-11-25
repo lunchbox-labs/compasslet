@@ -59,8 +59,7 @@ final class DriveSessionController {
   private enum CarPresence {
     case present
     /// The drive, or the latest start of its Live Activity, came away from the car, which hasn't
-    /// shown since. The drive ends once the wait for CarPlay passes without it, unless that wait
-    /// is never.
+    /// shown since. The drive ends once the wait for CarPlay passes without it.
     case awaited(since: Date)
     /// The car left during the drive. The drive ends once the auto-stop delay passes, unless
     /// auto-stop is never, or after `carPlayAbsenceLimit` while its Live Activity isn't running.
@@ -157,9 +156,9 @@ final class DriveSessionController {
     return true
   }
 
-  /// How long a drive waits for the car after a start away from it, or nil when it doesn't end
-  /// for the car's absence, as the wait for CarPlay is now set.
-  var carWaitDelay: TimeInterval? { carWait().delay }
+  /// How long a drive waits for the car after a start away from it, as the wait for CarPlay is
+  /// now set.
+  var carWaitDelay: TimeInterval { carWait().delay }
 
   var compactStatus: CompactStatus {
     switch state {
@@ -211,7 +210,7 @@ final class DriveSessionController {
   /// drive in progress.
   private let autoStop: @MainActor () -> LiveActivityAutoStop
   /// The wait for CarPlay choice, read the same way, so a change applies to a wait already running.
-  private let carWait: @MainActor () -> LiveActivityAutoStop
+  private let carWait: @MainActor () -> LiveActivityCarWait
   @ObservationIgnored private var active = false
   @ObservationIgnored private var suppressed = false
   /// Whether the location prompt was asked for while permission is undecided. It clears once a
@@ -232,7 +231,7 @@ final class DriveSessionController {
     autoStop: @escaping @MainActor () -> LiveActivityAutoStop = {
       LiveActivityPreferences().autoStop
     },
-    carWait: @escaping @MainActor () -> LiveActivityAutoStop = {
+    carWait: @escaping @MainActor () -> LiveActivityCarWait = {
       LiveActivityPreferences().carWait
     }
   ) {
@@ -622,10 +621,9 @@ final class DriveSessionController {
 
   /// How long the car can stay away, and since when it has: the wait for CarPlay after a drive, or
   /// a Live Activity start, away from it, or the auto-stop delay once it has left. Nil while the
-  /// car shows, while it is awaited when the wait is never, or once it has left when auto-stop is
-  /// never. An awaited car always has a running Live Activity, since without CarPlay a dismissal
-  /// or a failed start ends the drive. Auto-stop keeps only a drive whose Live
-  /// Activity is starting or showing; one whose Live Activity was dismissed or couldn't start
+  /// car shows, or once it has left when auto-stop is never. An awaited car always has a running
+  /// Live Activity, since without CarPlay a dismissal or a failed start ends the drive. Auto-stop
+  /// keeps only a drive whose Live Activity is starting or showing; one whose Live Activity was dismissed or couldn't start
   /// shows nothing once the car has gone, so it ends after the standard minute whatever auto-stop
   /// is set to.
   private func carAbsence(of session: DriveSession) -> (since: Date, limit: TimeInterval)? {
@@ -633,7 +631,7 @@ final class DriveSessionController {
     case .present:
       return nil
     case .awaited(let since):
-      return carWait().delay.map { (since: since, limit: $0) }
+      return (since: since, limit: carWait().delay)
     case .left(let since):
       guard session.liveActivity.isRunning else {
         return (since: since, limit: Self.carPlayAbsenceLimit)

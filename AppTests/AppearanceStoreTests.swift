@@ -800,7 +800,9 @@ struct AppearanceStoreTests {
     #expect(Set(stops).count == stops.count)
     #expect(LiveActivityUpdateFrequency.allCases.first == LiveActivityPreferences().updateFrequency)
     #expect(LiveActivityAutoStop.allCases.first == LiveActivityPreferences().autoStop)
-    #expect(LiveActivityAutoStop.allCases.first == LiveActivityPreferences().carWait)
+    let waits = LiveActivityCarWait.allCases.map(\.title)
+    #expect(Set(waits).count == waits.count)
+    #expect(LiveActivityCarWait.allCases.first == LiveActivityPreferences().carWait)
   }
 }
 

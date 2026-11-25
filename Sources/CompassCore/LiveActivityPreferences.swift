@@ -12,18 +12,30 @@ public enum LiveActivityUpdateFrequency: Int, CaseIterable, Codable, Sendable {
   public var interval: TimeInterval { TimeInterval(rawValue) }
 }
 
-/// How long a drive keeps running without the car before it ends on its own: after the car leaves
-/// (auto-stop), or after a start away from the car (the wait for CarPlay). Raw values are stable
-/// storage identifiers and give the delay in seconds, with 0 for never.
+/// How long a drive keeps running after the car leaves, before it ends on its own. Raw values are
+/// stable storage identifiers and give the delay in seconds, with 0 for never.
 public enum LiveActivityAutoStop: Int, CaseIterable, Codable, Sendable {
   case oneMinute = 60
   case fiveMinutes = 300
   case fifteenMinutes = 900
   case never = 0
 
-  /// How long without the car the drive ends, or nil when it runs until it is ended or reaches
-  /// the drive's own limit.
+  /// How long after the car leaves the drive ends, or nil when it runs until it is ended or
+  /// reaches the drive's own limit.
   public var delay: TimeInterval? { self == .never ? nil : TimeInterval(rawValue) }
+}
+
+/// How long a drive started away from the car, or whose Live Activity started again away from
+/// it, waits for CarPlay or car audio before it ends. Raw values are stable storage identifiers
+/// and give the wait in seconds. There is no unlimited wait, so a drive that the car never joins
+/// doesn't keep using location in the background without CarPlay.
+public enum LiveActivityCarWait: Int, CaseIterable, Codable, Sendable {
+  case oneMinute = 60
+  case fiveMinutes = 300
+  case fifteenMinutes = 900
+
+  /// How long the drive waits for the car.
+  public var delay: TimeInterval { TimeInterval(rawValue) }
 }
 
 /// How a drive's Live Activity updates and when it ends on its own. The standard values keep the
@@ -31,9 +43,7 @@ public enum LiveActivityAutoStop: Int, CaseIterable, Codable, Sendable {
 public struct LiveActivityPreferences: Codable, Hashable, Sendable {
   public var updateFrequency: LiveActivityUpdateFrequency = .everySecond
   public var autoStop: LiveActivityAutoStop = .oneMinute
-  /// How long a drive started away from the car, or whose Live Activity started again away from
-  /// it, waits for CarPlay or car audio before it ends.
-  public var carWait: LiveActivityAutoStop = .oneMinute
+  public var carWait: LiveActivityCarWait = .oneMinute
 
   public init() {}
 
@@ -56,7 +66,7 @@ public struct LiveActivityPreferences: Codable, Hashable, Sendable {
       (try? values.decodeIfPresent(LiveActivityAutoStop.self, forKey: .autoStop))
       ?? standard.autoStop
     carWait =
-      (try? values.decodeIfPresent(LiveActivityAutoStop.self, forKey: .carWait))
+      (try? values.decodeIfPresent(LiveActivityCarWait.self, forKey: .carWait))
       ?? standard.carWait
   }
 

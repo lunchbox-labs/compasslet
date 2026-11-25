@@ -1868,7 +1868,7 @@ struct StartShortcutAfterNotInUseTests {
 struct WaitForCarPlayTests {
   /// The wait for CarPlay choice the drive reads, which a test changes during a wait.
   @MainActor final class Choices {
-    var carWait = LiveActivityAutoStop.oneMinute
+    var carWait = LiveActivityCarWait.oneMinute
     var carAudio = false
   }
 
@@ -1890,43 +1890,31 @@ struct WaitForCarPlayTests {
       autoStop: { .oneMinute }, carWait: { choices.carWait })
   }
 
-  @Test(arguments: [LiveActivityAutoStop.oneMinute, .fiveMinutes, .fifteenMinutes])
-  func driveStartedAwayFromTheCarEndsAfterTheChosenWait(_ carWait: LiveActivityAutoStop)
-    async throws
-  {
-    let wait = try #require(carWait.delay)
+  @Test(arguments: LiveActivityCarWait.allCases)
+  func driveStartedAwayFromTheCarEndsAfterTheChosenWait(_ carWait: LiveActivityCarWait) async {
     choices.carWait = carWait
     let start = clock.now
     await controller.startLiveActivity()
     #expect(controller.isAwaitingTheCar)
-    #expect(controller.carWaitDelay == wait)
-    clock.run(until: start + wait)
+    #expect(controller.carWaitDelay == carWait.delay)
+    clock.run(until: start + carWait.delay)
     #expect(controller.isDriving)
-    clock.run(until: start + wait + 0.1)
+    clock.run(until: start + carWait.delay + 0.1)
     #expect(!controller.isDriving)
     await controller.waitForPendingOperations()
     #expect(sensor.stops == 1)
   }
 
-  @Test func neverWaitingKeepsTheDriveUntilItsOwnLimit() async {
-    choices.carWait = .never
-    let start = clock.now
-    await controller.startLiveActivity()
-    #expect(controller.carWaitDelay == nil)
-    clock.run(until: start + DriveSessionController.driveLimit - 1)
-    #expect(controller.isDriving)
-    #expect(controller.isAwaitingTheCar)
-    clock.run(until: start + DriveSessionController.driveLimit + 1)
-    #expect(!controller.isDriving)
-  }
-
-  @Test func carAudioDuringANeverWaitPutsTheDriveOnAutoStop() async {
-    choices.carWait = .never
+  @Test func carAudioDuringTheWaitPutsTheDriveOnAutoStop() async {
+    choices.carWait = .fifteenMinutes
     await controller.startLiveActivity()
     clock.run(until: clock.now + 10 * 60)
     choices.carAudio = true
     controller.carAudioChanged(connected: true)
     #expect(!controller.isAwaitingTheCar)
+    // Past the wait with the car there, the drive keeps running.
+    clock.run(until: clock.now + 30 * 60)
+    #expect(controller.isDriving)
     choices.carAudio = false
     controller.carAudioChanged(connected: false)
     let left = clock.now
@@ -1949,7 +1937,7 @@ struct WaitForCarPlayTests {
     #expect(!controller.isDriving)
 
     // Shorter than the time already waited: the next beat ends the drive.
-    choices.carWait = .never
+    choices.carWait = .fifteenMinutes
     start = clock.now
     await controller.startLiveActivity()
     clock.run(until: start + 10 * 60)
@@ -1957,22 +1945,12 @@ struct WaitForCarPlayTests {
     choices.carWait = .fiveMinutes
     clock.run(until: clock.now + DriveSessionController.heartbeatInterval)
     #expect(!controller.isDriving)
-
-    // Never, during the minute: the drive keeps running.
-    choices.carWait = .oneMinute
-    start = clock.now
-    await controller.startLiveActivity()
-    clock.run(until: start + 30)
-    choices.carWait = .never
-    clock.run(until: start + 60 * 60)
-    #expect(controller.isDriving)
-    await controller.endDrive()
   }
 
   /// The wait doesn't change how long a drive lasts once its car has left while its Live
   /// Activity isn't running.
   @Test func waitLeavesADismissedDriveOnTheMinuteAfterTheCarLeaves() async {
-    choices.carWait = .never
+    choices.carWait = .fifteenMinutes
     await controller.carPlayActivated()
     activity.onDismiss?()
     controller.carPlayResignedActive()

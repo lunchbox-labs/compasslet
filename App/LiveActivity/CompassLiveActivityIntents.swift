@@ -73,7 +73,7 @@ protocol ShortcutDrive: AnyObject {
   var compactStatus: DriveSessionController.CompactStatus { get }
   var setupStatus: DriveSessionController.SetupStatus { get }
   var isAwaitingTheCar: Bool { get }
-  var carWaitDelay: TimeInterval? { get }
+  var carWaitDelay: TimeInterval { get }
   var hasLiveActivity: Bool { get }
   func startLiveActivity() async
   func endLiveActivity() async
@@ -90,9 +90,6 @@ enum LiveActivityShortcut {
     /// Started away from the car, so the drive ends after this many seconds unless CarPlay
     /// connects.
     case startedWithoutCarPlay(TimeInterval)
-    /// Started away from the car with the wait for CarPlay at No Limit, so nothing about the car
-    /// ends the drive until CarPlay connects.
-    case startedWithoutCarPlayUntilEnded
     case started
   }
 
@@ -139,9 +136,7 @@ enum LiveActivityShortcut {
     guard drive.isDriving, drive.compactStatus != .unavailable else { return .couldNotStart }
     // Read when the run ends, since the car can come or go while it runs. A drive whose car left
     // during the run ends on Auto-Stop, which the wait for CarPlay would misstate.
-    guard drive.isAwaitingTheCar else { return .started }
-    guard let wait = drive.carWaitDelay else { return .startedWithoutCarPlayUntilEnded }
-    return .startedWithoutCarPlay(wait)
+    return drive.isAwaitingTheCar ? .startedWithoutCarPlay(drive.carWaitDelay) : .started
   }
 }
 
@@ -160,8 +155,6 @@ extension LiveActivityShortcut.StartOutcome {
     case .startedWithoutCarPlay(let wait):
       IntentDialog(
         "Live Activity started. It ends in \(Int(wait / 60)) minutes unless CarPlay connects.")
-    case .startedWithoutCarPlayUntilEnded:
-      "Live Activity started. It keeps running without CarPlay until you end it, for up to eight hours."
     case .started: "Live Activity started."
     }
   }

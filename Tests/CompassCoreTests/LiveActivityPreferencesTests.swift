@@ -16,6 +16,7 @@ import Testing
 @Test func liveActivityChoicesGiveTheirIntervalsAndDelays() {
   #expect(LiveActivityUpdateFrequency.allCases.map(\.interval) == [1, 5, 15])
   #expect(LiveActivityAutoStop.allCases.map(\.delay) == [60, 300, 900, nil])
+  #expect(LiveActivityCarWait.allCases.map(\.delay) == [60, 300, 900])
 }
 
 @Test func liveActivityPreferencesRoundTripAndRecoverFromBadStorage() throws {
@@ -39,9 +40,11 @@ import Testing
   let earlier = LiveActivityPreferences.decode(Data(#"{"refreshRate":5,"autoStop":0}"#.utf8))
   #expect(earlier.autoStop == .never)
   #expect(earlier.carWait == .oneMinute)
-  let wait = LiveActivityPreferences.decode(Data(#"{"carWait":0}"#.utf8))
-  #expect(wait.carWait == .never)
+  let wait = LiveActivityPreferences.decode(Data(#"{"carWait":300}"#.utf8))
+  #expect(wait.carWait == .fiveMinutes)
   #expect(wait.autoStop == .oneMinute)
+  // There's no unlimited wait, so 0, Auto-Stop's Never, reads as the standard one.
+  #expect(LiveActivityPreferences.decode(Data(#"{"carWait":0}"#.utf8)).carWait == .oneMinute)
   #expect(LiveActivityPreferences.decode(Data(#"{"carWait":42}"#.utf8)).carWait == .oneMinute)
   #expect(LiveActivityPreferences.decode(Data("not json".utf8)) == LiveActivityPreferences())
   #expect(LiveActivityPreferences.decode(Data("[]".utf8)) == LiveActivityPreferences())
