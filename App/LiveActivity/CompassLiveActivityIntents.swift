@@ -1,15 +1,16 @@
 import AppIntents
+import CompassCore
 
 /// Runs in the background, as from a CarPlay automation on a locked iPhone, because a Live
 /// Activity intent can start a Live Activity there. When In Use location may not start in the
 /// background, so if location reports that the app isn't in use, or no reading arrives, the
 /// intent asks to continue in the foreground and starts again there. Without CarPlay, the
-/// drive ends after `DriveSessionController.shortcutCarWait`.
+/// drive ends after the Shortcut Wait Time (`DriveSessionController.shortcutStartWait`).
 struct StartLiveActivityIntent: LiveActivityIntent {
   static var title: LocalizedStringResource { "Start Live Activity" }
   static var description: IntentDescription? {
     IntentDescription(
-      "Starts the Compasslet Live Activity for a CarPlay drive. Once CarPlay disconnects, it ends after the Auto-Stop time set in Settings, a minute by default. If CarPlay doesn’t connect, it ends after 15 minutes."
+      "Starts the Compasslet Live Activity for a CarPlay drive. Once CarPlay disconnects, it ends after the Auto-Stop time set in Settings, a minute by default. If CarPlay doesn’t connect, it ends after the Shortcut Wait Time set in Settings, 15 minutes by default."
     )
   }
   static var supportedModes: IntentModes { [.background, .foreground(.dynamic)] }
@@ -74,6 +75,7 @@ protocol ShortcutDrive: AnyObject {
   var setupStatus: DriveSessionController.SetupStatus { get }
   var isAwaitingTheCar: Bool { get }
   var carWaitDelay: TimeInterval? { get }
+  var shortcutStartWait: TimeInterval { get }
   var hasLiveActivity: Bool { get }
   func startLiveActivity(carWait: TimeInterval) async
   func endLiveActivity() async
@@ -103,7 +105,7 @@ enum LiveActivityShortcut {
   ) async -> StartOutcome {
     let wasRunning =
       drive.isDriving && (drive.compactStatus == .active || drive.compactStatus == .starting)
-    await drive.startLiveActivity(carWait: DriveSessionController.shortcutCarWait)
+    await drive.startLiveActivity(carWait: drive.shortcutStartWait)
     guard !wasRunning || !drive.isDriving else { return .alreadyRunning }
     if canContinueInForeground, await drive.needsForegroundStart(waitingUpTo: timeout),
       !Task.isCancelled
@@ -114,7 +116,7 @@ enum LiveActivityShortcut {
       } catch {
         return .openWhenParked
       }
-      await drive.startLiveActivity(carWait: DriveSessionController.shortcutCarWait)
+      await drive.startLiveActivity(carWait: drive.shortcutStartWait)
     }
     return outcome(of: drive)
   }
@@ -142,8 +144,7 @@ enum LiveActivityShortcut {
 }
 
 extension LiveActivityShortcut.StartOutcome {
-  /// Main actor, for the drive controller's waits it compares against.
-  @MainActor var dialog: IntentDialog {
+  var dialog: IntentDialog {
     switch self {
     case .alreadyRunning: "The Live Activity is already running."
     case .openWhenParked: "Open Compasslet when you’re parked to start the Live Activity."
@@ -152,12 +153,13 @@ extension LiveActivityShortcut.StartOutcome {
       "Allow precise location for Compasslet in the Settings app, then try again."
     case .couldNotStart:
       "The Live Activity couldn’t start. Make sure Live Activities are allowed for Compasslet in the Settings app."
-    case .startedWithoutCarPlay(let wait) where wait == DriveSessionController.shortcutCarWait:
-      "Live Activity started. It ends in 15 minutes unless CarPlay connects."
-    case .startedWithoutCarPlay(let wait) where wait == DriveSessionController.carPlayAbsenceLimit:
-      "Live Activity started. It ends in a minute unless CarPlay connects."
-    case .startedWithoutCarPlay:
-      "Live Activity started. It ends soon unless CarPlay connects."
+    case .startedWithoutCarPlay(let wait):
+      switch LiveActivityShortcutWait(rawValue: Int(wait)) {
+      case .oneMinute: "Live Activity started. It ends in a minute unless CarPlay connects."
+      case .fiveMinutes: "Live Activity started. It ends in 5 minutes unless CarPlay connects."
+      case .fifteenMinutes: "Live Activity started. It ends in 15 minutes unless CarPlay connects."
+      case nil: "Live Activity started. It ends soon unless CarPlay connects."
+      }
     case .started: "Live Activity started."
     }
   }

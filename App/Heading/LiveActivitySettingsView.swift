@@ -1,8 +1,8 @@
 import CompassCore
 import SwiftUI
 
-/// How often a drive updates its Live Activity, and when the drive ends on its own after the car
-/// leaves.
+/// How often a drive updates its Live Activity, and when the drive ends on its own without the
+/// car: after a start from the Start shortcut away from it, and after it leaves.
 struct LiveActivitySettingsView: View {
   var store: LiveActivitySettingsStore = .shared
 
@@ -15,6 +15,15 @@ struct LiveActivitySettingsView: View {
       } footer: {
         Text(
           "How often the Live Activity gets a new direction during a drive. iOS decides when the Lock Screen and CarPlay show each update. Compasslet’s own CarPlay screen isn’t affected."
+        )
+      }
+      Section {
+        choices(LiveActivityShortcutWait.allCases, keyPath: \.shortcutWait, title: \.title)
+      } header: {
+        Text("Shortcut Wait Time")
+      } footer: {
+        Text(
+          "How long a Live Activity started from Shortcuts or Siri waits for Compasslet to find CarPlay before it ends. Opening Compasslet on CarPlay keeps it running. Until it ends, Compasslet keeps using your location, which uses more battery."
         )
       }
       Section {
@@ -74,6 +83,16 @@ extension LiveActivityAutoStop {
     case .fiveMinutes: "5 Minutes"
     case .fifteenMinutes: "15 Minutes"
     case .never: "Never"
+    }
+  }
+}
+
+extension LiveActivityShortcutWait {
+  var title: String {
+    switch self {
+    case .oneMinute: "1 Minute"
+    case .fiveMinutes: "5 Minutes"
+    case .fifteenMinutes: "15 Minutes"
     }
   }
 }

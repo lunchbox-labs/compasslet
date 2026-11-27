@@ -14,7 +14,8 @@ final class CompassAppDelegate: NSObject, UIApplicationDelegate {
       }),
       carAudioRoute: { CarAudioRouteMonitor.isConnected },
       backgroundTime: { holdBackgroundTime() },
-      autoStop: { settings.preferences.autoStop })
+      autoStop: { settings.preferences.autoStop },
+      shortcutWait: { settings.preferences.shortcutWait })
     carAudio = CarAudioRouteMonitor { [weak drive] connected in
       drive?.carAudioChanged(connected: connected)
     }

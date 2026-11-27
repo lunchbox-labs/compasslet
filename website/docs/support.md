@@ -36,7 +36,8 @@ Live Activity or End Live Activity) at the bottom right of the compass screen on
 stop button also shows whenever the Live Activity is running without CarPlay.
 The same actions are in the Shortcuts app, and you can ask Siri to "Start Compasslet Live
 Activity". Starting it from Shortcuts or Siri usually doesn't open Compasslet, and it ends
-after 15 minutes if CarPlay isn't connected.
+after the Shortcut Wait Time in Settings › Live Activity, 15 minutes by default, if CarPlay
+isn't connected.
 
 ## Trouble with CarPlay?
 
