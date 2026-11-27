@@ -1886,15 +1886,17 @@ struct CarWaitTests {
       autoStop: { .oneMinute })
   }
 
-  @Test(arguments: [
-    DriveSessionController.carPlayAbsenceLimit, DriveSessionController.shortcutCarWait,
-  ])
-  func driveStartedAwayFromTheCarEndsAfterItsWait(_ wait: TimeInterval) async {
+  /// The app's start, with the default wait, and the Start shortcut's, with its own.
+  @Test(arguments: [false, true])
+  func driveStartedAwayFromTheCarEndsAfterItsWait(fromTheShortcut: Bool) async {
     let start = clock.now
-    if wait == DriveSessionController.carPlayAbsenceLimit {
-      await controller.startLiveActivity()
-    } else {
+    let wait: TimeInterval
+    if fromTheShortcut {
+      wait = DriveSessionController.shortcutCarWait
       await controller.startLiveActivity(carWait: wait)
+    } else {
+      wait = DriveSessionController.carPlayAbsenceLimit
+      await controller.startLiveActivity()
     }
     #expect(controller.isAwaitingTheCar)
     #expect(controller.carWaitDelay == wait)
