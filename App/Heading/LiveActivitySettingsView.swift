@@ -32,7 +32,7 @@ struct LiveActivitySettingsView: View {
         Text("Shortcut Wait Time")
       } footer: {
         Text(
-          "How long a Live Activity started from Shortcuts or Siri waits for Compasslet to find CarPlay before it ends. Opening Compasslet on CarPlay keeps it running. A change applies from the next start. Until it ends, Compasslet keeps using your location, which uses more battery."
+          "How long a Live Activity started from Shortcuts or Siri waits for Compasslet to find CarPlay before it ends. Opening Compasslet on CarPlay keeps it running. Until it ends, Compasslet keeps using your location, which uses more battery. A change applies from the next start."
         )
       }
     }

@@ -53,6 +53,6 @@ In Compasslet's Settings › Live Activity:
   for a Live Activity started again away from the car from Shortcuts or Siri.
 - **Shortcut Wait Time** sets how long a Live Activity started from Shortcuts or Siri waits
   for Compasslet to find CarPlay before it ends: 1 Minute, 5 Minutes or 15 Minutes (the
-  default). Opening Compasslet on CarPlay keeps it running. A change applies from the next
-  start. Until it ends, Compasslet keeps using your location, which uses more battery.
+  default). Opening Compasslet on CarPlay keeps it running. Until it ends, Compasslet keeps
+  using your location, which uses more battery. A change applies from the next start.
 
