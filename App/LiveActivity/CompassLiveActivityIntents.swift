@@ -4,12 +4,12 @@ import AppIntents
 /// Activity intent can start a Live Activity there. When In Use location may not start in the
 /// background, so if location reports that the app isn't in use, or no reading arrives, the
 /// intent asks to continue in the foreground and starts again there. Without CarPlay, the
-/// drive ends after the wait for CarPlay set in Settings.
+/// drive ends after `DriveSessionController.shortcutCarWait`.
 struct StartLiveActivityIntent: LiveActivityIntent {
   static var title: LocalizedStringResource { "Start Live Activity" }
   static var description: IntentDescription? {
     IntentDescription(
-      "Starts the Compasslet Live Activity for a CarPlay drive. If CarPlay doesn’t connect, it ends after the Wait for CarPlay time in Compasslet’s Settings › Live Activity. Once CarPlay disconnects, it ends after the Auto-Stop time there. Both are a minute by default."
+      "Starts the Compasslet Live Activity for a CarPlay drive. Once CarPlay disconnects, it ends after the Auto-Stop time set in Settings, a minute by default. If CarPlay doesn’t connect, it ends after 15 minutes."
     )
   }
   static var supportedModes: IntentModes { [.background, .foreground(.dynamic)] }
@@ -73,9 +73,9 @@ protocol ShortcutDrive: AnyObject {
   var compactStatus: DriveSessionController.CompactStatus { get }
   var setupStatus: DriveSessionController.SetupStatus { get }
   var isAwaitingTheCar: Bool { get }
-  var carWaitDelay: TimeInterval { get }
+  var carWaitDelay: TimeInterval? { get }
   var hasLiveActivity: Bool { get }
-  func startLiveActivity() async
+  func startLiveActivity(carWait: TimeInterval) async
   func endLiveActivity() async
   func needsForegroundStart(waitingUpTo timeout: Duration) async -> Bool
 }
@@ -103,7 +103,7 @@ enum LiveActivityShortcut {
   ) async -> StartOutcome {
     let wasRunning =
       drive.isDriving && (drive.compactStatus == .active || drive.compactStatus == .starting)
-    await drive.startLiveActivity()
+    await drive.startLiveActivity(carWait: DriveSessionController.shortcutCarWait)
     guard !wasRunning || !drive.isDriving else { return .alreadyRunning }
     if canContinueInForeground, await drive.needsForegroundStart(waitingUpTo: timeout),
       !Task.isCancelled
@@ -114,7 +114,7 @@ enum LiveActivityShortcut {
       } catch {
         return .openWhenParked
       }
-      await drive.startLiveActivity()
+      await drive.startLiveActivity(carWait: DriveSessionController.shortcutCarWait)
     }
     return outcome(of: drive)
   }
@@ -135,8 +135,9 @@ enum LiveActivityShortcut {
     }
     guard drive.isDriving, drive.compactStatus != .unavailable else { return .couldNotStart }
     // Read when the run ends, since the car can come or go while it runs. A drive whose car left
-    // during the run ends on Auto-Stop, which the wait for CarPlay would misstate.
-    return drive.isAwaitingTheCar ? .startedWithoutCarPlay(drive.carWaitDelay) : .started
+    // during the run ends on Auto-Stop, which the wait would misstate.
+    guard drive.isAwaitingTheCar, let wait = drive.carWaitDelay else { return .started }
+    return .startedWithoutCarPlay(wait)
   }
 }
 

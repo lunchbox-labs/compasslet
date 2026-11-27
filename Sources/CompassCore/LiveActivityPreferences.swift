@@ -25,25 +25,11 @@ public enum LiveActivityAutoStop: Int, CaseIterable, Codable, Sendable {
   public var delay: TimeInterval? { self == .never ? nil : TimeInterval(rawValue) }
 }
 
-/// How long a drive started away from the car, or whose Live Activity started again away from
-/// it, waits for CarPlay or car audio before it ends. Raw values are stable storage identifiers
-/// and give the wait in seconds. There is no unlimited wait, so a drive that the car never joins
-/// doesn't keep using location in the background without CarPlay.
-public enum LiveActivityCarWait: Int, CaseIterable, Codable, Sendable {
-  case oneMinute = 60
-  case fiveMinutes = 300
-  case fifteenMinutes = 900
-
-  /// How long the drive waits for the car.
-  public var delay: TimeInterval { TimeInterval(rawValue) }
-}
-
 /// How a drive's Live Activity updates and when it ends on its own. The standard values keep the
 /// behaviour from before these settings existed.
 public struct LiveActivityPreferences: Codable, Hashable, Sendable {
   public var updateFrequency: LiveActivityUpdateFrequency = .everySecond
   public var autoStop: LiveActivityAutoStop = .oneMinute
-  public var carWait: LiveActivityCarWait = .oneMinute
 
   public init() {}
 
@@ -51,7 +37,6 @@ public struct LiveActivityPreferences: Codable, Hashable, Sendable {
   private enum CodingKeys: String, CodingKey {
     case updateFrequency = "refreshRate"
     case autoStop
-    case carWait
   }
 
   /// Decodes saved values, keeping the standard choice for a key that is missing or holds a value
@@ -65,9 +50,6 @@ public struct LiveActivityPreferences: Codable, Hashable, Sendable {
     autoStop =
       (try? values.decodeIfPresent(LiveActivityAutoStop.self, forKey: .autoStop))
       ?? standard.autoStop
-    carWait =
-      (try? values.decodeIfPresent(LiveActivityCarWait.self, forKey: .carWait))
-      ?? standard.carWait
   }
 
   /// Loads persisted choices, recovering the standard ones from missing or corrupt data.
