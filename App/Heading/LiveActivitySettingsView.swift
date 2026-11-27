@@ -18,21 +18,21 @@ struct LiveActivitySettingsView: View {
         )
       }
       Section {
-        choices(LiveActivityShortcutWait.allCases, keyPath: \.shortcutWait, title: \.title)
-      } header: {
-        Text("Shortcut Wait Time")
-      } footer: {
-        Text(
-          "How long a Live Activity started from Shortcuts or Siri waits for Compasslet to find CarPlay before it ends. Opening Compasslet on CarPlay keeps it running. Until it ends, Compasslet keeps using your location, which uses more battery."
-        )
-      }
-      Section {
         choices(LiveActivityAutoStop.allCases, keyPath: \.autoStop, title: \.title)
       } header: {
         Text("Auto-Stop")
       } footer: {
         Text(
           "How long a drive continues after CarPlay disconnects. Until it ends, Compasslet keeps using your location, which uses more battery. Drives always end after eight hours."
+        )
+      }
+      Section {
+        choices(LiveActivityShortcutWait.allCases, keyPath: \.shortcutWait, title: \.title)
+      } header: {
+        Text("Shortcut Wait Time")
+      } footer: {
+        Text(
+          "How long a Live Activity started from Shortcuts or Siri waits for Compasslet to find CarPlay before it ends. Opening Compasslet on CarPlay keeps it running. A change applies from the next start. Until it ends, Compasslet keeps using your location, which uses more battery."
         )
       }
     }

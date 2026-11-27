@@ -251,8 +251,9 @@ the wait that `startLiveActivity(carWait:)` asks for, whatever auto-stop is set 
 start window (`carPlayAbsenceLimit`) by default, or the Shortcut Wait Time from the Start
 shortcut, which Shortcuts and Siri run (`DriveSessionController.shortcutStartWait`, read from
 `LiveActivityShortcutWait` at each start: 1, 5 or 15 minutes, 15 by default and
-`shortcutCarWait`). In practice a start from the app always finds the car, since the phone's button offers Start
-only with it, so the minute applies only when car audio drops just before the tap. The Start
+`shortcutCarWait`). In practice a start from the app always finds the car, since the phone's
+button offers Start only with it, so the minute applies only when car audio drops just before
+the tap. The Start
 shortcut's longer wait is there because a CarPlay automation usually runs it while CarPlay is
 connected but before Compasslet's CarPlay scene does, and without the scene the drive sees the
 car only through the audio route, which iOS often doesn't report to a background app while

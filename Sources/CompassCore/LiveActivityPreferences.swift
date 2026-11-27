@@ -38,8 +38,9 @@ public enum LiveActivityShortcutWait: Int, CaseIterable, Codable, Sendable {
   public var delay: TimeInterval { TimeInterval(rawValue) }
 }
 
-/// How a drive's Live Activity updates and when it ends on its own. The standard values keep the
-/// behaviour from before these settings existed.
+/// How a drive's Live Activity updates and when it ends on its own. The standard update frequency
+/// and auto-stop keep the behaviour from before these settings existed; the standard shortcut
+/// wait is longer than the minute shortcut starts had before it.
 public struct LiveActivityPreferences: Codable, Hashable, Sendable {
   public var updateFrequency: LiveActivityUpdateFrequency = .everySecond
   public var autoStop: LiveActivityAutoStop = .oneMinute
