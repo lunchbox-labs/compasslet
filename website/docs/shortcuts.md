@@ -65,6 +65,8 @@ Compasslet can ask you to unlock your iPhone if it needs to.
 - The Live Activity stays on while CarPlay is connected, whether or not you open Compasslet
   on CarPlay. Dismissing it ends it unless Compasslet is open on CarPlay.
 - If your iPhone asks you to unlock it, unlock it when you're parked.
+- If CarPlay doesn't connect, a Live Activity that Start Live Activity started ends after
+  15 minutes.
 - The End Compass shortcut is optional. Without it, the Live Activity ends once the
   Auto-Stop time in Compasslet's Settings › Live Activity › Auto-Stop has passed after
   CarPlay disconnects (a minute unless you change it), and stays on through brief

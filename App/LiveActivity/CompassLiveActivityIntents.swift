@@ -142,7 +142,8 @@ enum LiveActivityShortcut {
 }
 
 extension LiveActivityShortcut.StartOutcome {
-  var dialog: IntentDialog {
+  /// Main actor, for the drive controller's waits it compares against.
+  @MainActor var dialog: IntentDialog {
     switch self {
     case .alreadyRunning: "The Live Activity is already running."
     case .openWhenParked: "Open Compasslet when you’re parked to start the Live Activity."
@@ -151,11 +152,12 @@ extension LiveActivityShortcut.StartOutcome {
       "Allow precise location for Compasslet in the Settings app, then try again."
     case .couldNotStart:
       "The Live Activity couldn’t start. Make sure Live Activities are allowed for Compasslet in the Settings app."
-    case .startedWithoutCarPlay(let wait) where wait == 60:
+    case .startedWithoutCarPlay(let wait) where wait == DriveSessionController.shortcutCarWait:
+      "Live Activity started. It ends in 15 minutes unless CarPlay connects."
+    case .startedWithoutCarPlay(let wait) where wait == DriveSessionController.carPlayAbsenceLimit:
       "Live Activity started. It ends in a minute unless CarPlay connects."
-    case .startedWithoutCarPlay(let wait):
-      IntentDialog(
-        "Live Activity started. It ends in \(Int(wait / 60)) minutes unless CarPlay connects.")
+    case .startedWithoutCarPlay:
+      "Live Activity started. It ends soon unless CarPlay connects."
     case .started: "Live Activity started."
     }
   }

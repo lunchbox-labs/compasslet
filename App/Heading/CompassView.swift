@@ -38,6 +38,7 @@ struct CompassView: View {
   @ScaledMetric(relativeTo: .body) private var compactStatusSize = 17
   @ScaledMetric(relativeTo: .body) private var floatingControlDiameter: CGFloat = 52
   @AccessibilityFocusState private var settingsButtonFocused: Bool
+  @AccessibilityFocusState private var liveActivityButtonFocused: Bool
   @Namespace private var glassNamespace
 
   init(
@@ -175,6 +176,11 @@ struct CompassView: View {
       settingsButtonFocused = true
       drive.requestPhoneAuthorization(isForeground: scenePhase == .active)
     }
+    // A drive can end on its own while VoiceOver is on the button, as when its wait for CarPlay
+    // passes, so focus moves to the gear, which keeps its place.
+    .onChange(of: showsLiveActivityButton) { _, shown in
+      if !shown && liveActivityButtonFocused { settingsButtonFocused = true }
+    }
   }
 
   /// Car audio counts too, because a CarPlay automation can start a drive without
@@ -267,6 +273,7 @@ struct CompassView: View {
     .tipBackground(Color(uiColor: .secondarySystemGroupedBackground))
     .accessibilityLabel(liveActivityAction)
     .accessibilityHint(liveActivityHint)
+    .accessibilityFocused($liveActivityButtonFocused)
     .accessibilityShowsLargeContentViewer {
       Label(liveActivityAction, systemImage: liveActivitySymbol)
     }
@@ -283,11 +290,10 @@ struct CompassView: View {
 
   private var liveActivityHint: String {
     guard liveActivityRunning else { return "Shows your travel direction on the Lock Screen" }
-    // Without the car, the button leaves once the Live Activity ends, so only a shortcut starts
-    // it again.
+    // Without the car, the button leaves once the Live Activity ends, so it can't start it again.
     guard carPlayReady else {
       return
-        "Stops travel direction and location use until you start it again from Shortcuts or Siri"
+        "Stops travel direction and location use until you start it again from Shortcuts, Siri or Compasslet on CarPlay"
     }
     return
       "Stops travel direction and location use until you start it again or reopen Compasslet on CarPlay"
