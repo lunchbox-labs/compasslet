@@ -140,7 +140,7 @@ jobs:
   # One job per simulator, all from the one build. Appearances stay together in a simulator's
   # job, since switching appearance on a booted simulator is quick.
   # The job has no name of its own, so GitHub names each job after its one matrix value, as in
-  # "capture (largest)", and a skipped job plain "capture". GitHub shows a skipped job's name
+  # "capture (largest)", and names a skipped job plain "capture". GitHub shows a skipped job's name
   # unexpanded, so a name with an expression would read "capture (${{ matrix.devices }})".
   capture:
     needs: build
