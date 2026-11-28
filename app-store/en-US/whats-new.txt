@@ -1,0 +1,4 @@
+• New Shortcut Wait Time setting. Choose how long a Live Activity started from Shortcuts or Siri waits for CarPlay before it ends: 1, 5 or 15 minutes, with 15 as the default.
+• Settings now links to the Live Activity Shortcuts guide, which helps if the Live Activity doesn't start on its own when you connect to CarPlay.
+• The Live Activity skips needless updates while it waits for a travel direction.
+• Tidier appearance reset buttons in Settings.
