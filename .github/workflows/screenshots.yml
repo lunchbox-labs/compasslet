@@ -64,6 +64,7 @@ jobs:
     outputs:
       revision: ${{ steps.source.outputs.revision }}
       devices: ${{ steps.devices.outputs.devices }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - name: Choose what to check out
         id: target
@@ -111,6 +112,16 @@ jobs:
             devices=$(python3 scripts/screenshots devices --devices "$DEVICES" --filter "$SCREEN_FILTER")
           fi
           echo "devices=$devices" >> "$GITHUB_OUTPUT"
+      # The capture matrix carries only each simulator's request, which GitHub then shows in the
+      # job's name. Each capture job looks up its file label in the devices output.
+      - name: Make the capture matrix
+        id: matrix
+        env:
+          DEVICES: ${{ steps.devices.outputs.devices }}
+        run: |
+          python3 -c 'import json, os
+          matrix = [{"devices": device["devices"]} for device in json.loads(os.environ["DEVICES"])]
+          print("matrix=" + json.dumps(matrix))' >> "$GITHUB_OUTPUT"
       - name: Build the app and its tests
         run: python3 scripts/screenshots build --derived-data "$RUNNER_TEMP/xcode"
       # Upload doesn't keep file modes, so the products go in a tarball to keep the app's
@@ -128,15 +139,17 @@ jobs:
           overwrite: true
   # One job per simulator, all from the one build. Appearances stay together in a simulator's
   # job, since switching appearance on a booted simulator is quick.
+  # The job has no name of its own, so GitHub names each job after its one matrix value, as in
+  # "capture (largest)", and names a skipped job plain "capture". GitHub shows a skipped job's name
+  # unexpanded, so a name with an expression would read "capture (${{ matrix.devices }})".
   capture:
     needs: build
-    name: capture (${{ matrix.devices }})
     runs-on: xcode-27
     strategy:
       # Each simulator's images are worth keeping when another simulator's capture fails.
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.build.outputs.devices) }}
+        include: ${{ fromJSON(needs.build.outputs.matrix) }}
     # The accessibility set took about 42 minutes on hosted runners before screens were captured
     # in parts, mostly simulator boots and captures, all in one job. Up to nine parts per screen
     # hasn't been timed yet, so this leaves room for those parts and for a slow runner.
@@ -144,12 +157,22 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
+      - name: Look up the simulator's file label
+        id: simulator
+        env:
+          DEVICES: ${{ needs.build.outputs.devices }}
+          DEVICE: ${{ matrix.devices }}
+        run: |
+          python3 -c 'import json, os
+          devices = json.loads(os.environ["DEVICES"])
+          label = next(item["label"] for item in devices if item["devices"] == os.environ["DEVICE"])
+          print("label=" + label)' >> "$GITHUB_OUTPUT"
       # The images go in a folder named for the simulator, so the collect job finds each
       # simulator's images in its own folder however many captures uploaded. A job that fails
       # before capturing still uploads an empty list, which replaces an earlier attempt's images.
       - name: Start an empty capture
         env:
-          LABEL: ${{ matrix.label }}
+          LABEL: ${{ steps.simulator.outputs.label }}
         run: |
           mkdir -p "$RUNNER_TEMP/capture/$LABEL"
           echo "[]" > "$RUNNER_TEMP/capture/$LABEL/screenshots.json"
@@ -169,7 +192,7 @@ jobs:
         env:
           CAPTURE_SET: ${{ inputs.set }}
           DEVICE: ${{ matrix.devices }}
-          LABEL: ${{ matrix.label }}
+          LABEL: ${{ steps.simulator.outputs.label }}
           APPEARANCES: ${{ inputs.appearances == 'light' && 'light' || inputs.appearances == 'dark' && 'dark' || 'light,dark' }}
           SCREEN_FILTER: ${{ inputs.filter }}
           MAX_PARTS: ${{ inputs.max-parts || '9' }}
@@ -188,7 +211,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
-          name: screenshots-part-${{ github.run_number }}-${{ matrix.label }}
+          name: screenshots-part-${{ github.run_number }}-${{ steps.simulator.outputs.label }}
           path: ${{ runner.temp }}/capture
           if-no-files-found: error
           # Kept as long as the run's images, so a re-run of another simulator can collect these.
