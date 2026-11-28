@@ -16,7 +16,8 @@ SETS = runpy.run_path(str(ROOT / 'scripts/screenshots'))['SETS']
 def shell_step(name):
     workflow = (ROOT / '.github/workflows/screenshots.yml').read_text()
     step = workflow.split('      - name: ' + name + '\n', 1)[1]
-    step = step.split('\n      - ', 1)[0]
+    # The step ends at the next step or at the comment above it.
+    step = re.split(r'\n      [-#]', step, maxsplit=1)[0]
     return textwrap.dedent(step.split('        run: |\n', 1)[1])
 
 
@@ -136,6 +137,28 @@ class ScreenshotWorkflowTests(unittest.TestCase):
                 arguments = self.device_arguments(capture_set)
                 self.assertNotIn('--set', arguments)
                 self.assertEqual(arguments[arguments.index('--devices') + 1], 'largest')
+
+    def step_output(self, step, **environment):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'output'
+            output.touch()
+            result = subprocess.run(['bash', '-e', '-c', shell_step(step)],
+                                    env=dict(os.environ, GITHUB_OUTPUT=str(output), **environment),
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return output.read_text()
+
+    def test_the_capture_matrix_names_only_each_request_and_each_job_finds_its_label(self):
+        devices = json.dumps([{'devices': 'largest', 'label': 'largest'},
+                              {'devices': 'iPhone Duo', 'label': 'iphone-duo'}])
+        output = self.step_output('Make the capture matrix', DEVICES=devices)
+        self.assertEqual(output, 'matrix=' + json.dumps([{'devices': 'largest'},
+                                                         {'devices': 'iPhone Duo'}]) + '\n')
+        for device, label in (('largest', 'largest'), ('iPhone Duo', 'iphone-duo')):
+            with self.subTest(device=device):
+                output = self.step_output("Look up the simulator's file label",
+                                          DEVICES=devices, DEVICE=device)
+                self.assertEqual(output, 'label=' + label + '\n')
 
     def test_the_workflow_offers_every_set_the_script_has(self):
         workflow = (ROOT / '.github/workflows/screenshots.yml').read_text()

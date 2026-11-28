@@ -150,6 +150,11 @@ test('the capture jobs share one build and the collect job waits for every captu
 
 // GitHub shows a skipped matrix job's name without expanding it, so an expression in the
 // capture job's name would read as "capture (${{ matrix.devices }})" whenever it's skipped.
+// Without a name, GitHub names each capture after its matrix values, so the matrix carries only
+// the simulator's request and the job looks up its file label in the devices output.
 test('the capture job leaves its name to GitHub, so a skipped capture reads cleanly', () => {
   assert.equal(workflow.jobs.capture.name, undefined);
+  assert.equal(workflow.jobs.capture.strategy.matrix.include, '${{ fromJSON(needs.build.outputs.matrix) }}');
+  assert.equal(workflow.jobs.build.outputs.matrix, '${{ steps.matrix.outputs.matrix }}');
+  assert.ok(!JSON.stringify(workflow.jobs.capture.steps).includes('matrix.label'));
 });
