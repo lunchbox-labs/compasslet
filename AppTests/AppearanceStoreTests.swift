@@ -785,12 +785,14 @@ struct AppearanceStoreTests {
     store.update {
       $0.updateFrequency = .everyFifteenSeconds
       $0.autoStop = .never
+      $0.shortcutWait = .fiveMinutes
     }
     #expect(store.preferences.updateFrequency == .everyFifteenSeconds)
     // A relaunch reads the saved choices.
     let reopened = LiveActivitySettingsStore(defaults: defaults)
     #expect(reopened.preferences == store.preferences)
     #expect(reopened.preferences.autoStop == .never)
+    #expect(reopened.preferences.shortcutWait == .fiveMinutes)
     // Every choice reads differently, and the standard ones are the first listed.
     let rates = LiveActivityUpdateFrequency.allCases.map(\.title)
     let stops = LiveActivityAutoStop.allCases.map(\.title)
@@ -798,6 +800,10 @@ struct AppearanceStoreTests {
     #expect(Set(stops).count == stops.count)
     #expect(LiveActivityUpdateFrequency.allCases.first == LiveActivityPreferences().updateFrequency)
     #expect(LiveActivityAutoStop.allCases.first == LiveActivityPreferences().autoStop)
+    // The shortcut waits are listed shortest first, so the standard, the longest, is last.
+    let waits = LiveActivityShortcutWait.allCases.map(\.title)
+    #expect(Set(waits).count == waits.count)
+    #expect(LiveActivityShortcutWait.allCases.last == LiveActivityPreferences().shortcutWait)
   }
 }
 

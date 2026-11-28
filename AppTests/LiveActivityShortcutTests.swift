@@ -12,6 +12,12 @@ private final class FakeDrive: ShortcutDrive {
   var setupStatus: DriveSessionController.SetupStatus = .ready
   /// Whether the drive waits for the car, as one started away from it does.
   var isAwaitingTheCar = true
+  /// How long the drive waits for the car while it awaits it.
+  var carWaitDelay: TimeInterval? = DriveSessionController.shortcutCarWait
+  /// The Shortcut Wait Time the drive gives a start from the shortcut.
+  var shortcutStartWait = DriveSessionController.shortcutCarWait
+  /// The wait each start asked for.
+  private(set) var startWaits: [TimeInterval] = []
   var hasLiveActivity = false
   /// What a start leaves the Live Activity as; nil leaves no drive running.
   var startResult: DriveSessionController.CompactStatus? = .active
@@ -20,8 +26,9 @@ private final class FakeDrive: ShortcutDrive {
   var needsForeground = false
   private(set) var calls: [Call] = []
 
-  func startLiveActivity() async {
+  func startLiveActivity(carWait: TimeInterval) async {
     calls.append(.start)
+    startWaits.append(carWait)
     if startEndsDrive {
       isDriving = false
       compactStatus = .inactive
@@ -52,6 +59,7 @@ private struct Declined: Error {}
 
 @MainActor
 struct LiveActivityShortcutTests {
+  private let shortcutWait = DriveSessionController.shortcutCarWait
   private func start(
     _ drive: FakeDrive, canContinueInForeground: Bool = true, foregroundFails: Bool = false
   ) async -> LiveActivityShortcut.StartOutcome {
@@ -92,10 +100,35 @@ struct LiveActivityShortcutTests {
     #expect(drive.calls == [.start, .wait(.seconds(5))])
   }
 
-  @Test func startSaysTheMinuteOnlyWhileTheDriveAwaitsTheCar() async {
+  @Test func startAsksForTheShortcutWaitEachTime() async {
+    let drive = FakeDrive()
+    drive.needsForeground = true
+    _ = await start(drive)
+    #expect(drive.startWaits == [shortcutWait, shortcutWait])
+  }
+
+  @Test func startAsksForTheChosenShortcutWait() async {
+    let drive = FakeDrive()
+    drive.shortcutStartWait = 60
+    drive.needsForeground = true
+    _ = await start(drive)
+    #expect(drive.startWaits == [60, 60])
+  }
+
+  @Test func startSaysTheWaitThatTheDriveHas() async {
+    let minute = FakeDrive()
+    minute.carWaitDelay = 60
+    #expect(await start(minute) == .startedWithoutCarPlay(60))
+    // No wait to state: the drive isn't awaiting the car.
+    let none = FakeDrive()
+    none.carWaitDelay = nil
+    #expect(await start(none) == .started)
+  }
+
+  @Test func startSaysTheWaitOnlyWhileTheDriveAwaitsTheCar() async {
     let parked = FakeDrive()
-    #expect(await start(parked) == .startedWithoutCarPlay)
-    // With the car, or after it showed and left, the drive doesn't end after the minute.
+    #expect(await start(parked) == .startedWithoutCarPlay(shortcutWait))
+    // With the car, or after it showed and left, the drive doesn't end after the wait.
     let withTheCar = FakeDrive()
     withTheCar.isAwaitingTheCar = false
     #expect(await start(withTheCar) == .started)
@@ -104,7 +137,8 @@ struct LiveActivityShortcutTests {
   @Test func startThatCantContinueInTheForegroundDoesNotWaitForLocation() async {
     let drive = FakeDrive()
     drive.needsForeground = true
-    #expect(await start(drive, canContinueInForeground: false) == .startedWithoutCarPlay)
+    #expect(
+      await start(drive, canContinueInForeground: false) == .startedWithoutCarPlay(shortcutWait))
     #expect(drive.calls == [.start])
   }
 
@@ -126,7 +160,7 @@ struct LiveActivityShortcutTests {
       ) { drive.continueInForeground() }
     }
     task.cancel()
-    #expect(await task.value == .startedWithoutCarPlay)
+    #expect(await task.value == .startedWithoutCarPlay(shortcutWait))
     #expect(drive.calls == [.start, .wait(.seconds(5))])
     #expect(drive.isDriving)
   }
@@ -188,13 +222,18 @@ struct LiveActivityShortcutTests {
 @MainActor
 private final class CarAudioRoute { var connected = false }
 
+/// The Shortcut Wait Time as a drive reads it, which a test changes between starts.
+@MainActor
+private final class ShortcutWaitChoice { var value = LiveActivityShortcutWait.oneMinute }
+
 /// The Start shortcut on the real drive, away from the car or as the car comes and goes, with
-/// what it says checked against when the drive ends. Where it says the drive ends in a minute
-/// unless CarPlay connects, that minute runs from the shortcut whatever Auto-Stop is set to, and
+/// what it says checked against when the drive ends. Where it says the drive ends in 15 minutes
+/// unless CarPlay connects, that wait runs from the shortcut whatever Auto-Stop is set to, and
 /// where the drive ends on Auto-Stop instead, it doesn't say so
 /// ([#357](https://github.com/lunchbox-labs/compasslet/issues/357)).
 @Suite(.timeLimit(.minutes(1))) @MainActor
 struct StartShortcutAwayFromTheCarTests {
+  private let shortcutWait = DriveSessionController.shortcutCarWait
   let clock: TestDriveClock
   let sensor: TestTravelSensor
   let activity: TestActivityPresenter
@@ -207,11 +246,13 @@ struct StartShortcutAwayFromTheCarTests {
     carAudio = CarAudioRoute()
   }
 
-  private func makeDrive(autoStop: LiveActivityAutoStop) -> DriveSessionController {
+  private func makeDrive(
+    autoStop: LiveActivityAutoStop, shortcutWait: LiveActivityShortcutWait = .fifteenMinutes
+  ) -> DriveSessionController {
     let carAudio = carAudio
     return DriveSessionController(
       sensor: sensor, activity: activity, clock: clock, carAudioRoute: { carAudio.connected },
-      autoStop: { autoStop })
+      autoStop: { autoStop }, shortcutWait: { shortcutWait })
   }
 
   private func reading() -> TravelSensorEvent {
@@ -250,13 +291,16 @@ struct StartShortcutAwayFromTheCarTests {
     #expect(drive.compactStatus == .dismissed)
   }
 
-  /// Checks that the drive ends just after the start window from `start`, and not before.
+  /// Checks that the drive ends just after the shortcut's wait for the car from `start`, and not
+  /// before: a parked start keeps running well past the minute a start from the app gets.
   private func expectEndAfterTheStartWindow(
     of drive: DriveSessionController, from start: Date
   ) async {
-    clock.run(until: start + DriveSessionController.carPlayAbsenceLimit)
+    clock.run(until: start + DriveSessionController.carPlayAbsenceLimit + 1)
     #expect(drive.isDriving)
-    clock.run(until: start + DriveSessionController.carPlayAbsenceLimit + 0.1)
+    clock.run(until: start + shortcutWait)
+    #expect(drive.isDriving)
+    clock.run(until: start + shortcutWait + 0.1)
     #expect(!drive.isDriving)
     await drive.waitForPendingOperations()
     #expect(sensor.stops == 1)
@@ -275,15 +319,38 @@ struct StartShortcutAwayFromTheCarTests {
   }
 
   @Test(arguments: [LiveActivityAutoStop.oneMinute, .never])
-  func keptDriveEndsAMinuteAfterTheShortcut(autoStop: LiveActivityAutoStop) async {
+  func keptDriveEndsTheShortcutWaitAfterIt(autoStop: LiveActivityAutoStop) async {
     let drive = makeDrive(autoStop: autoStop)
     await keptDrive(drive)
-    #expect(await runStartShortcut(drive) == .startedWithoutCarPlay)
+    #expect(await runStartShortcut(drive) == .startedWithoutCarPlay(shortcutWait))
     #expect(drive.compactStatus == .active)
     #expect(sensor.starts == 1)
     // Not the Auto-Stop time from when the car left: 10 seconds from now for a minute, and
     // never for Never.
     await expectEndAfterTheStartWindow(of: drive, from: clock.now)
+  }
+
+  /// A shorter Shortcut Wait Time ends a parked start sooner, and a change applies from the next
+  /// start, not to the wait in progress.
+  @Test func shortcutStartEndsAfterTheChosenWait() async {
+    let choice = ShortcutWaitChoice()
+    let carAudio = carAudio
+    let drive = DriveSessionController(
+      sensor: sensor, activity: activity, clock: clock, carAudioRoute: { carAudio.connected },
+      autoStop: { .oneMinute }, shortcutWait: { choice.value })
+    for (wait, next) in [(60.0, LiveActivityShortcutWait.fiveMinutes), (300, .oneMinute)] {
+      let shortcut = Task { await runStartShortcut(drive) }
+      while !drive.isDriving { await Task.yield() }
+      let started = clock.now
+      sensor.receive?(reading())
+      #expect(await shortcut.value == .startedWithoutCarPlay(wait))
+      choice.value = next
+      clock.run(until: started + wait)
+      #expect(drive.isDriving)
+      clock.run(until: started + wait + 0.1)
+      #expect(!drive.isDriving)
+      await drive.waitForPendingOperations()
+    }
   }
 
   @Test(arguments: [LiveActivityAutoStop.fiveMinutes, .never])
@@ -292,7 +359,7 @@ struct StartShortcutAwayFromTheCarTests {
   ) async {
     let drive = makeDrive(autoStop: autoStop)
     await keptDrive(drive)
-    #expect(await runStartShortcut(drive) == .startedWithoutCarPlay)
+    #expect(await runStartShortcut(drive) == .startedWithoutCarPlay(shortcutWait))
     clock.run(until: clock.now + 30)
     drive.carPlayConnected()
     clock.run(until: clock.now + 10 * 60)
@@ -323,12 +390,12 @@ struct StartShortcutAwayFromTheCarTests {
     let drive = makeDrive(autoStop: autoStop)
     await keptDrive(drive, carAudioAtTheDisconnect: true)
     carAudio.connected = false
-    #expect(await runStartShortcut(drive) == .startedWithoutCarPlay)
+    #expect(await runStartShortcut(drive) == .startedWithoutCarPlay(shortcutWait))
     await expectEndAfterTheStartWindow(of: drive, from: clock.now)
   }
 
   /// CarPlay disconnecting while the Live Activity starts again leaves the drive on Auto-Stop, so
-  /// the shortcut doesn't announce the minute.
+  /// the shortcut doesn't announce the wait.
   @Test(arguments: [LiveActivityAutoStop.fiveMinutes, .never])
   func carPlayDisconnectingDuringTheRestartKeepsAutoStop(autoStop: LiveActivityAutoStop) async {
     let drive = makeDrive(autoStop: autoStop)
@@ -349,7 +416,7 @@ struct StartShortcutAwayFromTheCarTests {
   }
 
   /// Car audio dropping while the shortcut waits for location leaves a new drive on Auto-Stop, so
-  /// the shortcut doesn't announce the minute.
+  /// the shortcut doesn't announce the wait.
   @Test(arguments: [LiveActivityAutoStop.fiveMinutes, .never])
   func carAudioDroppingDuringTheWaitKeepsAutoStop(autoStop: LiveActivityAutoStop) async {
     let drive = makeDrive(autoStop: autoStop)
@@ -366,7 +433,7 @@ struct StartShortcutAwayFromTheCarTests {
   @Test func keptDriveDismissedAgainAwayFromTheCarEnds() async {
     let drive = makeDrive(autoStop: .never)
     await keptDrive(drive)
-    #expect(await runStartShortcut(drive) == .startedWithoutCarPlay)
+    #expect(await runStartShortcut(drive) == .startedWithoutCarPlay(shortcutWait))
     activity.onDismiss?()
     #expect(!drive.isDriving)
     await drive.waitForPendingOperations()
@@ -374,13 +441,13 @@ struct StartShortcutAwayFromTheCarTests {
   }
 
   @Test(arguments: [LiveActivityAutoStop.oneMinute, .never])
-  func freshStartEndsAMinuteAfterTheShortcut(autoStop: LiveActivityAutoStop) async {
+  func freshStartEndsTheShortcutWaitAfterIt(autoStop: LiveActivityAutoStop) async {
     let drive = makeDrive(autoStop: autoStop)
     let shortcut = Task { await runStartShortcut(drive) }
     while !drive.isDriving { await Task.yield() }
     let started = clock.now
     sensor.receive?(reading())
-    #expect(await shortcut.value == .startedWithoutCarPlay)
+    #expect(await shortcut.value == .startedWithoutCarPlay(shortcutWait))
     #expect(drive.compactStatus == .active)
     #expect(sensor.starts == 1)
     await expectEndAfterTheStartWindow(of: drive, from: started)

@@ -38,6 +38,7 @@ struct CompassView: View {
   @ScaledMetric(relativeTo: .body) private var compactStatusSize = 17
   @ScaledMetric(relativeTo: .body) private var floatingControlDiameter: CGFloat = 52
   @AccessibilityFocusState private var settingsButtonFocused: Bool
+  @AccessibilityFocusState private var liveActivityButtonFocused: Bool
   @Namespace private var glassNamespace
 
   init(
@@ -175,6 +176,11 @@ struct CompassView: View {
       settingsButtonFocused = true
       drive.requestPhoneAuthorization(isForeground: scenePhase == .active)
     }
+    // A drive can end on its own while VoiceOver is on the button, as when its wait for CarPlay
+    // passes, so focus moves to the gear, which keeps its place.
+    .onChange(of: showsLiveActivityButton) { _, shown in
+      if !shown && liveActivityButtonFocused { settingsButtonFocused = true }
+    }
   }
 
   /// Car audio counts too, because a CarPlay automation can start a drive without
@@ -183,13 +189,19 @@ struct CompassView: View {
     (drive.isCarPlayConnected || drive.isCarAudioConnected) && drive.setupStatus == .ready
   }
 
+  /// The Live Activity button shows while the car does, and while a Live Activity runs without
+  /// it, as one started from Shortcuts before CarPlay connects or kept by Auto-Stop, so the
+  /// drive can always be ended from here.
+  private var showsLiveActivityButton: Bool { carPlayReady || drive.isLiveActivityRunning }
+
   /// The tour shows the button for its step without CarPlay. When the step ends, the button
   /// merges back into the gear, which keeps its place, so nothing else moves.
   private var tourShowsLiveActivityControl: Bool { onboarding.step == .liveActivity }
 
   /// The screen's floating controls on glass in the bottom-right corner: Settings, and the
-  /// Live Activity button beside it while CarPlay is connected. One glass container, so the
-  /// two render as a group and the button can appear and leave beside the gear.
+  /// Live Activity button beside it while CarPlay is connected or a Live Activity runs. One
+  /// glass container, so the two render as a group and the button can appear and leave beside
+  /// the gear.
   private func floatingControls(compact: Bool, margin: CGFloat) -> some View {
     // Capped below the guide's 80pt so the row leaves the compass room at the largest text
     // sizes; the large content viewer shows each control's name instead.
@@ -198,13 +210,13 @@ struct CompassView: View {
       Spacer(minLength: 0)
       GlassEffectContainer(spacing: 12) {
         HStack(spacing: 12) {
-          if carPlayReady || tourShowsLiveActivityControl {
+          if showsLiveActivityButton || tourShowsLiveActivityControl {
             liveActivityButton(diameter: diameter)
           }
           settingsButton(diameter: diameter)
         }
       }
-      .animation(reduceMotion ? nil : .smooth, value: carPlayReady)
+      .animation(reduceMotion ? nil : .smooth, value: showsLiveActivityButton)
     }
     .padding(.horizontal, margin).padding(.bottom, 8)
     // On the row, not the button, which leaves when the car does and would take the alert along.
@@ -236,7 +248,8 @@ struct CompassView: View {
     .accessibilityFocused($settingsButtonFocused)
   }
 
-  /// The manual fallback for the automatic CarPlay start, shown while CarPlay is connected.
+  /// The manual fallback for the automatic CarPlay start, shown while CarPlay is connected, and
+  /// the way to end a Live Activity running without it.
   private func liveActivityButton(diameter: CGFloat) -> some View {
     Button(action: toggleLiveActivity) {
       FloatingControlLabel(
@@ -260,6 +273,7 @@ struct CompassView: View {
     .tipBackground(Color(uiColor: .secondarySystemGroupedBackground))
     .accessibilityLabel(liveActivityAction)
     .accessibilityHint(liveActivityHint)
+    .accessibilityFocused($liveActivityButtonFocused)
     .accessibilityShowsLargeContentViewer {
       Label(liveActivityAction, systemImage: liveActivitySymbol)
     }
@@ -276,6 +290,11 @@ struct CompassView: View {
 
   private var liveActivityHint: String {
     guard liveActivityRunning else { return "Shows your travel direction on the Lock Screen" }
+    // Without the car, the button leaves once the Live Activity ends, so it can't start it again.
+    guard carPlayReady else {
+      return
+        "Stops travel direction and location use until you start it again from Shortcuts, Siri or Compasslet on CarPlay"
+    }
     return
       "Stops travel direction and location use until you start it again or reopen Compasslet on CarPlay"
   }
@@ -286,6 +305,9 @@ struct CompassView: View {
     Task {
       if running {
         await drive.endLiveActivity()
+        // Without the car the button leaves with the Live Activity, so VoiceOver focus moves to
+        // the gear, which keeps its place, rather than wherever the system puts it.
+        if !carPlayReady { settingsButtonFocused = true }
         AccessibilityNotification.Announcement("Live Activity ended").post()
       } else {
         await drive.startLiveActivity()

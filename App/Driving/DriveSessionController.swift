@@ -59,8 +59,9 @@ final class DriveSessionController {
   private enum CarPresence {
     case present
     /// The drive, or the latest start of its Live Activity, came away from the car, which hasn't
-    /// shown since. The drive ends once `carPlayAbsenceLimit` passes without it.
-    case awaited(since: Date)
+    /// shown since. The drive ends once `limit` passes without it: `carPlayAbsenceLimit`, or
+    /// `shortcutStartWait` for a start from the Start shortcut.
+    case awaited(since: Date, limit: TimeInterval)
     /// The car left during the drive. The drive ends once the auto-stop delay passes, unless
     /// auto-stop is never, or after `carPlayAbsenceLimit` while its Live Activity isn't running.
     case left(since: Date)
@@ -156,6 +157,15 @@ final class DriveSessionController {
     return true
   }
 
+  /// How long the drive waits for the car while it awaits it, or nil otherwise.
+  var carWaitDelay: TimeInterval? {
+    guard let session = current, case .awaited(_, let limit) = session.car else { return nil }
+    return limit
+  }
+
+  /// How long a start from the Start shortcut waits for the car: the Shortcut Wait Time choice.
+  var shortcutStartWait: TimeInterval { shortcutWait().delay }
+
   var compactStatus: CompactStatus {
     switch state {
     case .idle(liveActivityFailed: true): return .unavailable
@@ -183,6 +193,14 @@ final class DriveSessionController {
   /// How long a drive started away from the car waits for CarPlay or car audio before it ends.
   /// It is also the standard auto-stop delay once the car leaves (`LiveActivityAutoStop`).
   static let carPlayAbsenceLimit: TimeInterval = 60
+  /// How long a drive started from the Start shortcut waits for CarPlay or car audio by default
+  /// (`LiveActivityShortcutWait`). A CarPlay automation usually runs it while CarPlay is
+  /// connected, but without Compasslet's CarPlay scene the app sees the car only through the
+  /// audio route, which iOS often doesn't report to a background app while nothing plays. So the
+  /// drive allows for a parked start before it treats the car as gone. No choice is unlimited, so
+  /// a start away from the car doesn't keep using location for long without CarPlay
+  /// ([#334](https://github.com/lunchbox-labs/compasslet/issues/334)).
+  static let shortcutCarWait = LiveActivityPreferences().shortcutWait.delay
   /// How long a drive waits for a reading after location reports that the app isn't in use
   /// before it ends, since the report can arrive while readings still flow and readings can be
   /// sparse where GPS is weak, such as in a garage. It stays within the background time iOS gives.
@@ -204,6 +222,8 @@ final class DriveSessionController {
   /// The auto-stop choice, read whenever a limit is checked or set, so a change applies to the
   /// drive in progress.
   private let autoStop: @MainActor () -> LiveActivityAutoStop
+  /// The Shortcut Wait Time choice, read at each start from the Start shortcut.
+  private let shortcutWait: @MainActor () -> LiveActivityShortcutWait
   @ObservationIgnored private var active = false
   @ObservationIgnored private var suppressed = false
   /// Whether the location prompt was asked for while permission is undecided. It clears once a
@@ -223,6 +243,9 @@ final class DriveSessionController {
     backgroundTime: @escaping @MainActor () -> @MainActor () -> Void = { {} },
     autoStop: @escaping @MainActor () -> LiveActivityAutoStop = {
       LiveActivityPreferences().autoStop
+    },
+    shortcutWait: @escaping @MainActor () -> LiveActivityShortcutWait = {
+      LiveActivityPreferences().shortcutWait
     }
   ) {
     self.sensor = sensor
@@ -231,6 +254,7 @@ final class DriveSessionController {
     self.readCarAudioRoute = carAudioRoute
     self.holdBackgroundTime = backgroundTime
     self.autoStop = autoStop
+    self.shortcutWait = shortcutWait
     refreshSetupStatus()
     observeAuthorization()
   }
@@ -321,10 +345,11 @@ final class DriveSessionController {
   /// The manual fallback for when the automatic CarPlay start doesn't produce a Live Activity.
   /// With no drive running, it starts one. During a drive whose Live Activity was dismissed or
   /// couldn't start, it starts only the Live Activity again. Either way, started away from the
-  /// car, as from Shortcuts, the drive ends unless CarPlay connects within the absence limit.
+  /// car, the drive ends unless CarPlay connects within `carWait`: the absence limit, or
+  /// `shortcutStartWait` from the Start shortcut.
   /// Call it from the foreground app or a Live Activity intent, because ActivityKit only starts
   /// activities there.
-  func startLiveActivity() async {
+  func startLiveActivity(carWait: TimeInterval = DriveSessionController.carPlayAbsenceLimit) async {
     await prepare()
     refreshSetupStatus()
     guard setupStatus == .ready else { return }
@@ -335,7 +360,7 @@ final class DriveSessionController {
         state = .idle(liveActivityFailed: true)
         return
       }
-      await beginDrive()
+      await beginDrive(carWait: carWait)
       return
     }
     guard session.liveActivity == .dismissed || session.liveActivity == .unavailable else {
@@ -346,21 +371,22 @@ final class DriveSessionController {
     // still does, since location may be stopped.
     if case .recovered = session.notInUseReport { session.notInUseReport = .unreported }
     setLiveActivity(.starting, for: session)
-    awaitCarIfAway(session)
+    awaitCarIfAway(session, carWait: carWait)
     await startActivity(for: session)
   }
 
   /// Away from the car, a drive whose Live Activity starts again waits for the car as a new drive
   /// does, so it gets the start window from now, whatever auto-stop is set to, rather than the
   /// auto-stop delay counted from when the car left.
-  private func awaitCarIfAway(_ session: DriveSession) {
+  private func awaitCarIfAway(_ session: DriveSession, carWait: TimeInterval) {
     refreshCarAudio()
     guard !isCarPlayConnected, !isCarAudioConnected else { return }
-    session.car = .awaited(since: clock.now)
+    session.car = .awaited(since: clock.now, limit: carWait)
     armDeadline(for: session)
   }
 
-  private func beginDrive() async {
+  private func beginDrive(carWait: TimeInterval = DriveSessionController.carPlayAbsenceLimit) async
+  {
     let session = DriveSession(startedAt: clock.now)
     sensor.receive = { [weak self, weak session] event in
       guard let self, let session else { return }
@@ -377,7 +403,7 @@ final class DriveSessionController {
     // A notification can be missed while the app is suspended, so read the route itself.
     isCarAudioConnected = readCarAudioRoute()
     if !isCarPlayConnected, !isCarAudioConnected {
-      session.car = .awaited(since: session.startedAt)
+      session.car = .awaited(since: session.startedAt, limit: carWait)
     }
     presentation = TravelPresentation(sample: nil, status: .waiting)
     state = .driving(session)
@@ -618,8 +644,8 @@ final class DriveSessionController {
     switch session.car {
     case .present:
       return nil
-    case .awaited(let since):
-      return (since: since, limit: Self.carPlayAbsenceLimit)
+    case .awaited(let since, let limit):
+      return (since: since, limit: limit)
     case .left(let since):
       guard session.liveActivity.isRunning else {
         return (since: since, limit: Self.carPlayAbsenceLimit)

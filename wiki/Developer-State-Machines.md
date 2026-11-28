@@ -8,8 +8,12 @@ transition they touch. File and line references are to commit
 symbol if lines have moved. [Development](Developer-Development#reading-policies) gives the
 reading policies these machines enforce.
 
-Open failure states are listed here and under their machine, each tracked as an issue. None
-are open.
+Open failure states are listed here and under their machine, each tracked as an issue:
+
+- [#374](https://github.com/lunchbox-labs/compasslet/issues/374): a drive started from a
+  CarPlay automation, without Compasslet's CarPlay scene, can end while CarPlay is connected,
+  because the audio route that shows the car isn't reported while nothing plays. See
+  [Car presence](#car-presence-and-the-absence-limit).
 
 These are fixed:
 
@@ -233,7 +237,7 @@ stateDiagram-v2
     [*] --> Present: drive starts with CarPlay or car audio
     [*] --> Awaited: drive starts with neither
     Awaited --> Present: CarPlay connects or car audio returns
-    Awaited --> Ended: 60 s without the car (carPlayAbsenceLimit)
+    Awaited --> Ended: its wait passes without the car (60 s, or the Shortcut Wait Time from the Start shortcut)
     Present --> Left: CarPlay disconnects without car audio, or car audio drops without CarPlay
     Left --> Present: CarPlay connects or car audio returns
     Left --> Awaited: Live Activity started again with neither
@@ -241,10 +245,27 @@ stateDiagram-v2
     Left --> Ended: 60 s while the Live Activity is dismissed or couldn't start
 ```
 
-The states are `DriveSession.car`, a `CarPresence`: `present`, `awaited(since:)` or
-`left(since:)`. `carAbsence(of:)` gives each its limit. A drive started away from the car, as
-from Shortcuts, always gets the 60 s start window (`carPlayAbsenceLimit`), whatever auto-stop
-is set to. Once the car has shown and left, the limit is the auto-stop delay
+The states are `DriveSession.car`, a `CarPresence`: `present`, `awaited(since:limit:)` or
+`left(since:)`. `carAbsence(of:)` gives each its limit. A drive started away from the car gets
+the wait that `startLiveActivity(carWait:)` asks for, whatever auto-stop is set to: the 60 s
+start window (`carPlayAbsenceLimit`) by default, or the Shortcut Wait Time from the Start
+shortcut, which Shortcuts and Siri run (`DriveSessionController.shortcutStartWait`, read from
+`LiveActivityShortcutWait` at each start: 1, 5 or 15 minutes, 15 by default and
+`shortcutCarWait`). In practice a start from the app always finds the car, since the phone's
+button offers Start only with it, so the minute applies only when car audio drops just before
+the tap. The Start
+shortcut's longer wait is there because a CarPlay automation usually runs it while CarPlay is
+connected but before Compasslet's CarPlay scene does, and without the scene the drive sees the
+car only through the audio route, which iOS often doesn't report to a background app while
+nothing plays. The drive then counts as away from the car though it isn't, and the longer wait
+gives a parked start time for the car to show. That is an open failure state
+([#374](https://github.com/lunchbox-labs/compasslet/issues/374)): a parked wait past the Shortcut
+Wait Time still ends the drive. No choice is unlimited, so a start away from the car doesn't
+keep using location without CarPlay for long, which
+[#334](https://github.com/lunchbox-labs/compasslet/issues/334) holds back. The wait counts from
+`startedAt`, so a background start's location wait of up to 5 s comes out of it. An awaited
+drive always has a running Live Activity, since without CarPlay a dismissal or failed start ends
+the drive. Once the car has shown and left, the limit is the auto-stop delay
 (`LiveActivityAutoStop`: 1, 5 or 15 minutes, or never) while the drive's Live Activity is
 `starting` or `active` (`LiveActivityStatus.isRunning`), which `DriveSessionController` reads
 through its `autoStop` closure each time it checks or sets a limit, so a change in Settings
@@ -252,9 +273,9 @@ applies to a wait already running. A drive whose Live Activity is `dismissed` or
 would show nothing once the car has gone, so it keeps the 60 s limit whatever auto-stop is set
 to. Starting its Live Activity again during that minute with neither CarPlay nor car audio, as
 from Shortcuts, moves it to `awaited` from that moment (`awaitCarIfAway`, after reading the
-audio route), so it gets the same start window as a new drive and the Start shortcut's minute
-holds; once the car shows and leaves again, the auto-stop delay applies
-([#357](https://github.com/lunchbox-labs/compasslet/issues/357), fixed by
+audio route), with the wait that start asks for, so it gets the same wait as a new drive from
+there and what the Start shortcut says holds; once the car shows and leaves again, the auto-stop
+delay applies ([#357](https://github.com/lunchbox-labs/compasslet/issues/357), fixed by
 [#358](https://github.com/lunchbox-labs/compasslet/pull/358)). The standard choice, 1 minute, is
 the same 60 s as before the setting existed. With Never and a running Live Activity, nothing
 ends the drive for the car's absence: it runs until it is ended, its Live Activity is dismissed
@@ -279,7 +300,9 @@ The drive's view of its Live Activity is `DriveSession.liveActivity`, a
 represented. `compactStatus` and `isLiveActivityRunning` are computed from `state`:
 `compactStatus` is `inactive` when idle, `unavailable` after a Live Activity start failed
 without CarPlay, and otherwise the drive's status. `isLiveActivityRunning` is true while a
-drive runs with its activity `starting` or `active`; the phone's Live Activity button reads it.
+drive runs with its activity `starting` or `active`; the phone's Live Activity button reads it,
+and shows while it is true even without the car (`CompassView.showsLiveActivityButton`), so a
+drive started away from the car or kept by Auto-Stop can be ended there.
 After a start from that button, `CompassView.toggleLiveActivity` shows the Live Activity
 Couldn't Start alert whenever `compactStatus` is `unavailable` and setup is `ready`, with or
 without a drive: without Compasslet's CarPlay scene the failed start leaves none.
@@ -500,21 +523,28 @@ stateDiagram-v2
     NotInUse --> Ended: 15 s without a newer reading, or any other stopDrive
 ```
 
-`LiveActivityShortcut.outcome(of:)` answers `startedWithoutCarPlay`, whose dialog says the drive
-ends in a minute unless CarPlay connects, only while the drive awaits the car
+`LiveActivityShortcut.start` asks for the drive's `shortcutStartWait` on both of its starts.
+`LiveActivityShortcut.outcome(of:)` answers `startedWithoutCarPlay` with the drive's wait
+(`DriveSessionController.carWaitDelay`), whose dialog says the drive ends in that time unless
+CarPlay connects, only while the drive awaits the car
 (`DriveSessionController.isAwaitingTheCar`, true for `awaited`), read when the run ends rather
 than from the connection flags, since the car can come or go during the run. A new drive started
 away from the car starts `awaited`, and a kept drive whose Live Activity the intent starts again
-away from the car moves to `awaited` from then (see
-[Car presence](#car-presence-and-the-absence-limit)), so the minute holds either way, whatever
+away from the car moves to `awaited` from then (see [Car
+presence](#car-presence-and-the-absence-limit)), so the stated wait holds either way, whatever
 Auto-Stop is set to ([#357](https://github.com/lunchbox-labs/compasslet/issues/357), fixed by
 [#358](https://github.com/lunchbox-labs/compasslet/pull/358)). A drive that is `present`, or
 `left` because CarPlay disconnected or car audio dropped during the run, answers `started`
 ("Live Activity started."): it ends on Auto-Stop, which no dialog states.
 `StartShortcutAwayFromTheCarTests` in `LiveActivityShortcutTests.swift` runs the shortcut on the
-real controller for a kept drive with Auto-Stop at 1 minute and Never, car audio found or gone at
-the start, the car connecting after it, CarPlay disconnecting during the restart, car audio
-dropping during the wait for location, the Live Activity dismissed again, and a new drive.
+real controller for a kept drive with Auto-Stop at 1 minute and Never, car audio found or gone
+at the start, the car connecting after it, CarPlay disconnecting during the restart, car audio
+dropping during the wait for location, the Live Activity dismissed again, and a new drive, each
+checked to run past the app's minute to the end of the 15 minutes, and a start with a shorter
+Shortcut Wait Time, changed between starts. `CarWaitTests` in
+`DriveSessionControllerTests.swift` covers the wait on the controller: the minute and the
+shortcut's wait, car audio during the wait, a Live Activity started again away from the car with
+the shortcut's wait, and a dismissal during it.
 
 ## CarPlay scene
 

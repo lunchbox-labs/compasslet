@@ -32,10 +32,12 @@ unless you change it in Compasslet's Settings › Live Activity › Auto-Stop), 
 decides when to show it.
 Make sure Live Activities are allowed for Compasslet in the Settings app. While CarPlay is
 connected, you can also start or end it yourself with the round play or stop button (Start
-Live Activity or End Live Activity) at the bottom right of the compass screen on iPhone.
+Live Activity or End Live Activity) at the bottom right of the compass screen on iPhone. The
+stop button also shows whenever the Live Activity is running without CarPlay.
 The same actions are in the Shortcuts app, and you can ask Siri to "Start Compasslet Live
 Activity". Starting it from Shortcuts or Siri usually doesn't open Compasslet, and it ends
-after a minute if CarPlay isn't connected.
+after the Shortcut Wait Time in Settings › Live Activity, 15 minutes by default, if CarPlay
+isn't connected.
 
 ## Trouble with CarPlay?
 

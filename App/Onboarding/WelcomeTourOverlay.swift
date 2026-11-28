@@ -202,12 +202,12 @@ struct WelcomeTourOverlay: View {
         "Compasslet shows your heading from magnetic north on iPhone, and your travel direction on CarPlay."
     case .liveActivity:
       let shown =
-        "When you open Compasslet on CarPlay, the Live Activity starts on its own and shows your travel direction on the Lock Screen and in the Dynamic Island. Until CarPlay disconnects, this button appears beside Settings in the bottom-right corner so you can end it or start it again."
+        "When you open Compasslet on CarPlay, the Live Activity starts on its own and shows your travel direction on the Lock Screen and in the Dynamic Island. While CarPlay is connected, this button appears beside Settings in the bottom-right corner so you can end the Live Activity or start it again. Without CarPlay, it shows only while the Live Activity runs, to end it."
       return carPlayConnected
         ? shown : shown + " You’re seeing a preview. It hides when you move on."
     case .shortcuts:
       return
-        "Start Live Activity and End Live Activity are also in the Shortcuts app for your automations, and you can ask Siri to “Start Compasslet Live Activity”. If your iPhone asks you to unlock it, do it while parked. Once CarPlay disconnects, the Live Activity ends after the Auto-Stop time you choose in Settings, a minute by default. If CarPlay doesn’t connect, it ends after a minute."
+        "Start Live Activity and End Live Activity are also in the Shortcuts app for your automations, and you can ask Siri to “Start Compasslet Live Activity”. If your iPhone asks you to unlock it, do it while parked. Once CarPlay disconnects, the Live Activity ends after the Auto-Stop time you choose in Settings, a minute by default. Started from Shortcuts or Siri, it ends after the Shortcut Wait Time, 15 minutes by default, if CarPlay doesn’t connect."
     }
   }
 }
