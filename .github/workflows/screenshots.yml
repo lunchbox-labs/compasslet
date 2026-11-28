@@ -128,9 +128,11 @@ jobs:
           overwrite: true
   # One job per simulator, all from the one build. Appearances stay together in a simulator's
   # job, since switching appearance on a booted simulator is quick.
+  # The job has no name of its own: GitHub names each job after its matrix entry, as in
+  # "capture (largest, iphone-18-pro-max)", and a skipped job, whose matrix GitHub never
+  # expands, as plain "capture". A name with an expression would show unexpanded when skipped.
   capture:
     needs: build
-    name: capture (${{ matrix.devices }})
     runs-on: xcode-27
     strategy:
       # Each simulator's images are worth keeping when another simulator's capture fails.

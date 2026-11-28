@@ -147,3 +147,9 @@ test('the capture jobs share one build and the collect job waits for every captu
   assert.equal(workflow.jobs.capture.concurrency, undefined);
   assert.equal(workflow.jobs.build.concurrency, undefined);
 });
+
+// GitHub shows a skipped matrix job's name without expanding it, so an expression in the
+// capture job's name would read as "capture (${{ matrix.devices }})" whenever it's skipped.
+test('the capture job leaves its name to GitHub, so a skipped capture reads cleanly', () => {
+  assert.equal(workflow.jobs.capture.name, undefined);
+});
